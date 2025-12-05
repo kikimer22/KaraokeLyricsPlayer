@@ -6,18 +6,20 @@ interface UseLineProgressProps {
   data: SongData;
   currentTimeMs: number;
   activeIndex: number;
-  isPlaying: boolean
+  isPlaying: boolean;
 }
 
 export const useLineProgress = ({ data, currentTimeMs, activeIndex, isPlaying }: UseLineProgressProps) => {
   const lineProgress = useSharedValue(0);
 
   const updateLineProgress = useCallback((activeIndex: number, currentTimeMs: number, isPlaying: boolean) => {
+    cancelAnimation(lineProgress);
+
     if (activeIndex < 0) {
-      cancelAnimation(lineProgress);
       lineProgress.value = 0;
       return;
     }
+
     const { milliseconds, duration } = data.lrc[activeIndex];
     const lineStart = milliseconds;
     const lineEnd = milliseconds + duration;
@@ -28,17 +30,23 @@ export const useLineProgress = ({ data, currentTimeMs, activeIndex, isPlaying }:
     }
 
     const offset = currentTimeMs - lineStart;
+    const currentProgress = Math.max(0, Math.min(1, offset / duration));
     const remainingDuration = duration - offset;
 
-    lineProgress.value = offset / duration;
+    lineProgress.value = currentProgress;
+
     if (!isPlaying) {
-      cancelAnimation(lineProgress);
       return;
     }
-    lineProgress.value = withTiming(1, {
-      duration: remainingDuration,
-      easing: Easing.linear,
-    });
+
+    if (remainingDuration > 0 && currentProgress < 1) {
+      lineProgress.value = withTiming(1, {
+        duration: remainingDuration,
+        easing: Easing.linear,
+      });
+    } else {
+      lineProgress.value = 1;
+    }
   }, [data.lrc, lineProgress]);
 
   useEffect(() => {
