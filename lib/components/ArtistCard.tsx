@@ -1,5 +1,5 @@
 import { View, Text, Image, StyleSheet } from 'react-native';
-import type { FC } from 'react';
+import { type FC, memo } from 'react';
 
 interface ArtistCardProps {
   uri?: string;
@@ -53,4 +53,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ArtistCard;
+export default memo(ArtistCard);

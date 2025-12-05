@@ -43,8 +43,9 @@ export const useLineProgress = ({ data, currentTimeMs, activeIndex, isPlaying }:
 
   useEffect(() => {
     if (activeIndex < 0) return;
+    // Only update when activeIndex changes or playback state changes
     updateLineProgress(activeIndex, currentTimeMs, isPlaying);
-  }, [activeIndex, currentTimeMs, isPlaying, updateLineProgress]);
+  }, [activeIndex, isPlaying, updateLineProgress]);
 
   return { lineProgress };
 };

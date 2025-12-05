@@ -22,7 +22,9 @@ export default function App() {
   const isUserScrolling = useRef(false);
   const flatListRef = useRef<FlatList>(null);
   const { currentTimeMs, totalDurationMs, isPlaying, play, pause, seekTo } = useAudioPlayer(SONG_DATA);
-  const activeIndex = useMemo(() => findCurrentIndex(SONG_DATA.lrc, currentTimeMs), [currentTimeMs]);
+  // Added debounce via currentSecond for findCurrentIndex (reduced calls)
+  const currentSecond = useMemo(() => Math.floor(currentTimeMs / 1000), [currentTimeMs]);
+  const activeIndex = useMemo(() => findCurrentIndex(SONG_DATA.lrc, currentTimeMs), [currentSecond]);
   useScroll({ activeIndex, isUserScrolling, flatListRef });
   const { lineProgress } = useLineProgress({ data: SONG_DATA, currentTimeMs, activeIndex, isPlaying });
 
@@ -90,6 +92,11 @@ export default function App() {
                 onScrollBeginDrag={handleScrollBeginDrag}
                 onMomentumScrollEnd={handleMomentumScrollEnd}
                 showsVerticalScrollIndicator={false}
+                windowSize={7}
+                initialNumToRender={5}
+                maxToRenderPerBatch={3}
+                updateCellsBatchingPeriod={50}
+                removeClippedSubviews={true}
               />
             </View>
           ) : (
@@ -116,6 +123,11 @@ export default function App() {
                 onScrollBeginDrag={handleScrollBeginDrag}
                 onMomentumScrollEnd={handleMomentumScrollEnd}
                 showsVerticalScrollIndicator={false}
+                windowSize={7}
+                initialNumToRender={5}
+                maxToRenderPerBatch={3}
+                updateCellsBatchingPeriod={50}
+                removeClippedSubviews={true}
               />
             </MaskedView>
           )}

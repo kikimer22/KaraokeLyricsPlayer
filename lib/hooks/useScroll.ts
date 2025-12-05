@@ -18,5 +18,5 @@ export const useScroll = ({activeIndex, isUserScrolling, flatListRef}: UseScroll
         viewPosition: 0.5,
       });
     }
-  }, [activeIndex]);
+  }, [activeIndex, isUserScrolling, flatListRef]);
 };

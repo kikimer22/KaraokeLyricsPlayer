@@ -30,7 +30,10 @@ const LyricLine: FC<LyricLineProps> = ({
 
   const translation = translationLang ? item.translations[translationLang] : null;
 
-  const animatedGradientStyle = useAnimatedStyle(() => ({ width: `${progress.value * 100}%` }));
+  const animatedGradientStyle = useAnimatedStyle(() => {
+    if (!isActive) return { width: '0%' };
+    return { width: `${progress.value * 100}%` };
+  }, [isActive]);
 
   return (
     <View style={[styles.itemContainer, { opacity }]}>
@@ -104,7 +107,7 @@ const styles = StyleSheet.create({
   },
   lyricTextActive: {
     fontSize: 32,
-    lineHeight: 46,
+    lineHeight: 44,
     color: '#FFF',
     fontWeight: '600',
     textAlign: 'center',

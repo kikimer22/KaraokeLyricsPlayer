@@ -42,6 +42,7 @@ const PlayerControls: FC<PlayerControlsProps> = ({
           minimumTrackTintColor="#FFFFFF"
           maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
           thumbTintColor="#FFFFFF"
+          tapToSeek={true}
         />
         <View style={styles.timeContainer}>
           <Text style={styles.timeText}>{formatTime(currentTimeMs)}</Text>
