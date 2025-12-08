@@ -1,9 +1,118 @@
-import { type FC, memo, useCallback, useState } from 'react';
+import { type FC, memo, useCallback, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Play, Pause, SkipBack, SkipForward, Heart } from 'lucide-react-native';
 import { formatTime } from '@/lib/utils';
-import { usePlayerControlsStore } from '@/lib/store/store';
+import { usePlayerControlsStore, useTimeDisplayStore, useControlsButtonsStore } from '@/lib/store/store';
+
+const TimeDisplay = memo(() => {
+  const { currentTimeMs, totalDurationMs } = useTimeDisplayStore();
+  const formattedCurrentTime = formatTime(currentTimeMs);
+  const formattedRemainingTime = formatTime(totalDurationMs - currentTimeMs);
+
+  return (
+    <View style={styles.timeContainer}>
+      <Text style={styles.timeText}>{formattedCurrentTime}</Text>
+      <Text style={styles.timeText}>-{formattedRemainingTime}</Text>
+    </View>
+  );
+});
+
+TimeDisplay.displayName = 'TimeDisplay';
+
+const SlidingTimeDisplay = memo(({ value, totalDurationMs }: { value: number; totalDurationMs: number }) => {
+  const formattedCurrentTime = formatTime(value);
+  const formattedRemainingTime = formatTime(totalDurationMs - value);
+
+  return (
+    <View style={styles.timeContainer}>
+      <Text style={styles.timeText}>{formattedCurrentTime}</Text>
+      <Text style={styles.timeText}>-{formattedRemainingTime}</Text>
+    </View>
+  );
+});
+
+SlidingTimeDisplay.displayName = 'SlidingTimeDisplay';
+
+const ControlButtons = memo(({
+  onPlayPause,
+  onSkipBack,
+  onSkipForward,
+}: {
+  onPlayPause: () => void;
+  onSkipBack?: () => void;
+  onSkipForward?: () => void;
+}) => {
+  const [isLiked, setIsLiked] = useState(false);
+  const { isPlaying, translationLang, setModalVisible } = useControlsButtonsStore();
+
+  const handleModalOpen = useCallback(() => {
+    setModalVisible(true);
+  }, [setModalVisible]);
+
+  const handleLike = useCallback(() => {
+    setIsLiked((prev) => !prev);
+  }, []);
+
+  return (
+    <View style={styles.controls}>
+      <TouchableOpacity
+        style={styles.secondaryBtn}
+        onPress={handleLike}
+        accessibilityLabel={isLiked ? 'Unlike' : 'Like'}
+        accessibilityRole="button"
+      >
+        <Heart fill={isLiked ? '#FFF' : 'none'} color="#FFF" size={28} />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.secondaryBtn}
+        onPress={onSkipBack}
+        disabled={!onSkipBack}
+        accessibilityLabel="Skip back"
+        accessibilityRole="button"
+      >
+        <SkipBack color="#FFF" size={28} />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.playBtn}
+        onPress={onPlayPause}
+        accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+        accessibilityRole="button"
+      >
+        {isPlaying ? (
+          <Pause color="#000" size={32} fill="#000" />
+        ) : (
+          <Play color="#000" size={32} fill="#000" style={{ marginLeft: 4 }} />
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.secondaryBtn}
+        onPress={onSkipForward}
+        disabled={!onSkipForward}
+        accessibilityLabel="Skip forward"
+        accessibilityRole="button"
+      >
+        <SkipForward color="#FFF" size={28} />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={handleModalOpen}
+        style={styles.secondaryBtn}
+        accessibilityLabel="Translation settings"
+        accessibilityRole="button"
+      >
+        <Text style={styles.buttonText}>
+          {translationLang ? translationLang.toUpperCase() : 'CC'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+ControlButtons.displayName = 'ControlButtons';
 
 interface PlayerControlsProps {
   readonly onPlayPause: () => void;
@@ -12,142 +121,67 @@ interface PlayerControlsProps {
   readonly onSkipForward?: () => void;
 }
 
-const PlayerControls: FC<PlayerControlsProps> = memo(
-  ({
-    onPlayPause,
-    onSeek,
-    onSkipBack,
-    onSkipForward,
-  }) => {
-    const [isLiked, setIsLiked] = useState(false);
-    const [isSliding, setIsSliding] = useState(false);
-    const [sliderValue, setSliderValue] = useState(0);
+const PlayerControls: FC<PlayerControlsProps> = ({
+  onPlayPause,
+  onSeek,
+  onSkipBack,
+  onSkipForward,
+}) => {
+  const [isSliding, setIsSliding] = useState(false);
+  const [sliderValue, setSliderValue] = useState(0);
+  const { currentTimeMs, totalDurationMs } = usePlayerControlsStore();
+  const currentTimeMsRef = useRef(currentTimeMs);
+  currentTimeMsRef.current = currentTimeMs;
 
-    const {
-      isPlaying,
-      currentTimeMs,
-      translationLang,
-      totalDurationMs,
-      setModalVisible,
-    } = usePlayerControlsStore();
+  const handleSlidingStart = useCallback(() => {
+    setIsSliding(true);
+    setSliderValue(currentTimeMsRef.current);
+  }, []);
 
-    const displayValue = isSliding ? sliderValue : currentTimeMs;
-    const formattedCurrentTime = formatTime(displayValue);
-    const formattedRemainingTime = formatTime(totalDurationMs - displayValue);
+  const handleValueChange = useCallback((value: number) => {
+    setSliderValue(value);
+  }, []);
 
-    const handleSlidingStart = useCallback(() => {
-      setIsSliding(true);
-      setSliderValue(currentTimeMs);
-    }, [currentTimeMs]);
+  const handleSlidingComplete = useCallback((value: number) => {
+    setIsSliding(false);
+    onSeek(value);
+  }, [onSeek]);
 
-    const handleValueChange = useCallback((value: number) => {
-      setSliderValue(value);
-    }, []);
-
-    const handleSlidingComplete = useCallback((value: number) => {
-      setIsSliding(false);
-      onSeek(value);
-    }, [onSeek]);
-
-    const handleModalOpen = useCallback(() => {
-      setModalVisible(true);
-    }, [setModalVisible]);
-
-    const handleLike = useCallback(() => {
-      setIsLiked((prev) => !prev);
-    }, []);
-
-    return (
-      <View style={styles.container}>
-        <View style={styles.sliderContainer}>
-          <Slider
-            style={styles.slider}
-            minimumValue={0}
-            maximumValue={totalDurationMs}
-            value={displayValue}
-            onSlidingStart={handleSlidingStart}
-            onValueChange={handleValueChange}
-            onSlidingComplete={handleSlidingComplete}
-            minimumTrackTintColor="#FFFFFF"
-            maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
-            thumbTintColor="#FFFFFF"
-            tapToSeek
-          />
-          <View style={styles.timeContainer}>
-            <Text style={styles.timeText}>{formattedCurrentTime}</Text>
-            <Text style={styles.timeText}>-{formattedRemainingTime}</Text>
-          </View>
-        </View>
-
-        <View style={styles.controls}>
-          {/* like */}
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            onPress={handleLike}
-            accessibilityLabel={isLiked ? 'Unlike' : 'Like'}
-            accessibilityRole="button"
-          >
-            <Heart
-              fill={isLiked ? '#FFF' : 'none'}
-              color="#FFF"
-              size={28}
-            />
-          </TouchableOpacity>
-
-          {/* back */}
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            onPress={onSkipBack}
-            disabled={!onSkipBack}
-            accessibilityLabel="Skip back"
-            accessibilityRole="button"
-          >
-            <SkipBack color="#FFF" size={28}/>
-          </TouchableOpacity>
-
-          {/* Play or Pause */}
-          <TouchableOpacity
-            style={styles.playBtn}
-            onPress={onPlayPause}
-            accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
-            accessibilityRole="button"
-          >
-            {isPlaying ? (
-              <Pause color="#000" size={32} fill="#000"/>
-            ) : (
-              <Play color="#000" size={32} fill="#000" style={{ marginLeft: 4 }}/>
-            )}
-          </TouchableOpacity>
-
-          {/* next */}
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            onPress={onSkipForward}
-            disabled={!onSkipForward}
-            accessibilityLabel="Skip forward"
-            accessibilityRole="button"
-          >
-            <SkipForward color="#FFF" size={28}/>
-          </TouchableOpacity>
-
-          {/* translation */}
-          <TouchableOpacity
-            onPress={handleModalOpen}
-            style={styles.secondaryBtn}
-            accessibilityLabel="Translation settings"
-            accessibilityRole="button"
-          >
-            <Text style={styles.buttonText}>
-              {translationLang ? translationLang.toUpperCase() : 'CC'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+  return (
+    <View style={styles.container}>
+      <View style={styles.sliderContainer}>
+        <Slider
+          style={styles.slider}
+          minimumValue={0}
+          maximumValue={totalDurationMs}
+          value={isSliding ? sliderValue : currentTimeMs}
+          onSlidingStart={handleSlidingStart}
+          onValueChange={handleValueChange}
+          onSlidingComplete={handleSlidingComplete}
+          minimumTrackTintColor="#FFFFFF"
+          maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
+          thumbTintColor="#FFFFFF"
+          tapToSeek
+        />
+        {isSliding ? (
+          <SlidingTimeDisplay value={sliderValue} totalDurationMs={totalDurationMs} />
+        ) : (
+          <TimeDisplay />
+        )}
       </View>
-    );
-  }
-);
+
+      <ControlButtons
+        onPlayPause={onPlayPause}
+        onSkipBack={onSkipBack}
+        onSkipForward={onSkipForward}
+      />
+    </View>
+  );
+};
 
 PlayerControls.displayName = 'PlayerControls';
+
+export default memo(PlayerControls);
 
 const styles = StyleSheet.create({
   container: {
@@ -197,4 +231,3 @@ const styles = StyleSheet.create({
   },
 });
 
-export default PlayerControls;

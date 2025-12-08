@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { FlatList, Platform, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import MaskedView from '@react-native-masked-view/masked-view';
@@ -26,8 +26,13 @@ const GRADIENT_MASK_COLORS = ['transparent', 'black', 'black', 'transparent'] as
 const GRADIENT_MASK_LOCATIONS = [0, 0.2, 0.8, 1] as const;
 
 export default function App() {
-  const { translationLang, isUserScrolling, activeIndex, currentTimeMs, setIsUserScrolling } = useAppStore();
-  const { play, toggle, seekTo } = useAudioPlayer({ data: SONG_DATA });
+  const { translationLang, isUserScrolling, activeIndex, setIsUserScrolling } = useAppStore();
+  const currentTimeMsShared = useSharedValue(0);
+
+  const { play, toggle, seekTo } = useAudioPlayer({
+    data: SONG_DATA,
+    onTimeUpdate: (timeMs) => { currentTimeMsShared.value = timeMs; },
+  });
 
   const lineWordsMap = useMemo(
     () => (hasValidRichSync(SONG_DATA) ? createLineWordsLookup(SONG_DATA) : new Map()),
@@ -37,11 +42,6 @@ export default function App() {
   useActiveIndex({ lyrics: SONG_DATA.lrc, lineWordsMap });
 
   const flatListRef = useAutoScroll({ activeIndex, enabled: !isUserScrolling });
-  const currentTimeMsShared = useSharedValue(0);
-
-  useEffect(() => {
-    currentTimeMsShared.value = currentTimeMs;
-  }, [currentTimeMs, currentTimeMsShared]);
 
   const handleWordPress = useCallback((timeMs: number) => {
     currentTimeMsShared.value = timeMs;
@@ -54,10 +54,18 @@ export default function App() {
     seekTo(timeMs);
   }, [seekTo, currentTimeMsShared]);
 
-  const handleLinePress = useCallback((line: LrcLine) => {
-    const words = getWordsForLine(lineWordsMap, line._id.$oid);
-    seekTo(words.length ? words[0].start : line.milliseconds);
-    play();
+  const linePressHandlers = useRef<Map<string, () => void>>(new Map());
+
+  const getLinePressHandler = useCallback((line: LrcLine) => {
+    const id = line._id.$oid;
+    if (!linePressHandlers.current.has(id)) {
+      linePressHandlers.current.set(id, () => {
+        const words = getWordsForLine(lineWordsMap, id);
+        seekTo(words.length ? words[0].start : line.milliseconds);
+        play();
+      });
+    }
+    return linePressHandlers.current.get(id)!;
   }, [seekTo, play, lineWordsMap]);
 
   const handleScrollBeginDrag = useCallback(() => setIsUserScrolling(true), [setIsUserScrolling]);
@@ -69,14 +77,13 @@ export default function App() {
     <LyricLine
       item={item}
       translationLang={translationLang}
-      index={index}
-      activeIndex={activeIndex}
-      onLinePress={() => handleLinePress(item)}
+      isActive={index === activeIndex}
+      onLinePress={getLinePressHandler(item)}
       lineWords={getWordsForLine(lineWordsMap, item._id.$oid)}
       currentTimeMs={currentTimeMsShared}
       onWordPress={handleWordPress}
     />
-  ), [translationLang, activeIndex, lineWordsMap, handleLinePress, currentTimeMsShared, handleWordPress]);
+  ), [translationLang, activeIndex, lineWordsMap, getLinePressHandler, currentTimeMsShared, handleWordPress]);
 
   const keyExtractor = useCallback((item: LrcLine) => item._id.$oid, []);
 

@@ -33,7 +33,6 @@ export const useTextHighlight = ({
   const resolvedDirection = writingDirection ?? (I18nManager.isRTL ? 'rtl' : 'ltr');
   const isRTL = resolvedDirection === 'rtl';
   const displayText = useMemo(() => text.trim(), [text]);
-  const textLength = displayText.length;
   const wordMappings = useMemo(() => mapWordsToChars(displayText, words), [displayText, words]);
 
   const handleLayout = useCallback((e: NativeSyntheticEvent<TextLayoutEventData>) => {
@@ -72,7 +71,6 @@ export const useTextHighlight = ({
     lines,
     ready,
     displayText,
-    textLength,
     wordMappings,
     resolvedDirection,
     handleLayout,

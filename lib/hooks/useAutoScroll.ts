@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import type { FlatList } from 'react-native';
 import { AUTO_SCROLL_DELAY_MS } from '@/lib/constants';
 
@@ -21,29 +21,30 @@ export const useAutoScroll = ({
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastIndexRef = useRef(-2);
 
-  const scrollTo = useCallback(() => {
-    if (!enabled || !listRef.current || activeIndex === lastIndexRef.current) return;
-
-    try {
-      if (activeIndex < 0) {
-        listRef.current.scrollToOffset({ offset: 0, animated });
-      } else {
-        listRef.current.scrollToIndex({ index: activeIndex, animated, viewPosition });
-      }
-      lastIndexRef.current = activeIndex;
-    } catch {
-      // Scroll failed silently
-    }
-  }, [activeIndex, enabled, animated, viewPosition]);
-
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || activeIndex === lastIndexRef.current) return;
 
-    timeoutRef.current = setTimeout(scrollTo, delayMs);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+    timeoutRef.current = setTimeout(() => {
+      if (!listRef.current) return;
+
+      try {
+        if (activeIndex < 0) {
+          listRef.current.scrollToOffset({ offset: 0, animated });
+        } else {
+          listRef.current.scrollToIndex({ index: activeIndex, animated, viewPosition });
+        }
+        lastIndexRef.current = activeIndex;
+      } catch {
+        // Scroll failed silently
+      }
+    }, delayMs);
+
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [enabled, delayMs, scrollTo]);
+  }, [activeIndex, enabled, animated, viewPosition, delayMs]);
 
   return listRef;
 };

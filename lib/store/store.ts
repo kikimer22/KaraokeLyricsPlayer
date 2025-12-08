@@ -44,11 +44,10 @@ const usePlayerStore = create<PlayerState>((set) => ({
 
 export const useAppStore = () =>
   usePlayerStore(
-    useShallow(({ translationLang, activeIndex, isUserScrolling, currentTimeMs, setIsUserScrolling }) => ({
+    useShallow(({ translationLang, activeIndex, isUserScrolling, setIsUserScrolling }) => ({
       translationLang,
       activeIndex,
       isUserScrolling,
-      currentTimeMs,
       setIsUserScrolling,
     }))
   );
@@ -81,22 +80,27 @@ export const useActiveIndexStore = () =>
     }))
   );
 
-export const useLineProgressStore = () =>
+export const usePlayerControlsStore = () =>
   usePlayerStore(
-    useShallow(({ currentTimeMs, activeIndex, isPlaying }) => ({
+    useShallow(({ currentTimeMs, totalDurationMs }) => ({
       currentTimeMs,
-      activeIndex,
-      isPlaying,
+      totalDurationMs,
     }))
   );
 
-export const usePlayerControlsStore = () =>
+export const useTimeDisplayStore = () =>
   usePlayerStore(
-    useShallow(({ isPlaying, currentTimeMs, translationLang, totalDurationMs, setModalVisible }) => ({
-      isPlaying,
+    useShallow(({ currentTimeMs, totalDurationMs }) => ({
       currentTimeMs,
-      translationLang,
       totalDurationMs,
+    }))
+  );
+
+export const useControlsButtonsStore = () =>
+  usePlayerStore(
+    useShallow(({ isPlaying, translationLang, setModalVisible }) => ({
+      isPlaying,
+      translationLang,
       setModalVisible,
     }))
   );

@@ -22,11 +22,18 @@ export const useAudioPlayer = ({ data, onTimeUpdate, onPlaybackEnd }: UseAudioPl
     setTotalDurationMs(totalDurationMs);
   }, [setTotalDurationMs, totalDurationMs]);
 
-  const rafRef = useRef<number>(null);
+  const rafRef = useRef<number | null>(null);
   const startTimeRef = useRef(0);
   const pauseTimeRef = useRef(0);
   const lastTickRef = useRef(0);
   const lastRafRef = useRef(0);
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+  const onPlaybackEndRef = useRef(onPlaybackEnd);
+
+  useEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdate;
+    onPlaybackEndRef.current = onPlaybackEnd;
+  });
 
   const tick = useCallback((timestamp: number) => {
     if (timestamp - lastRafRef.current < RAF_THROTTLE_MS) {
@@ -42,19 +49,19 @@ export const useAudioPlayer = ({ data, onTimeUpdate, onPlaybackEnd }: UseAudioPl
       setIsPlaying(false);
       setCurrentTimeMs(totalDurationMs);
       pauseTimeRef.current = totalDurationMs;
-      cancelAnimationFrame(rafRef.current!);
-      onPlaybackEnd?.();
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      onPlaybackEndRef.current?.();
       return;
     }
 
     if (now - lastTickRef.current >= TICK_INTERVAL_MS) {
       setCurrentTimeMs(elapsed);
       lastTickRef.current = now;
-      onTimeUpdate?.(elapsed);
+      onTimeUpdateRef.current?.(elapsed);
     }
 
     rafRef.current = requestAnimationFrame(tick);
-  }, [totalDurationMs, setIsPlaying, setCurrentTimeMs, onTimeUpdate, onPlaybackEnd]);
+  }, [totalDurationMs, setIsPlaying, setCurrentTimeMs]);
 
   const play = useCallback(() => {
     if (isPlaying) return;
@@ -68,7 +75,7 @@ export const useAudioPlayer = ({ data, onTimeUpdate, onPlaybackEnd }: UseAudioPl
   const pause = useCallback(() => {
     if (!isPlaying) return;
     setIsPlaying(false);
-    cancelAnimationFrame(rafRef.current!);
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
     pauseTimeRef.current = Date.now() - startTimeRef.current;
   }, [isPlaying, setIsPlaying]);
 
@@ -76,10 +83,11 @@ export const useAudioPlayer = ({ data, onTimeUpdate, onPlaybackEnd }: UseAudioPl
 
   const seekTo = useCallback((ms: number) => {
     const wasPlaying = isPlaying;
-    cancelAnimationFrame(rafRef.current!);
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
     const clamped = Math.max(0, Math.min(ms, totalDurationMs));
     setCurrentTimeMs(clamped);
+    onTimeUpdateRef.current?.(clamped);
     pauseTimeRef.current = clamped;
     startTimeRef.current = Date.now() - clamped;
 
@@ -96,7 +104,9 @@ export const useAudioPlayer = ({ data, onTimeUpdate, onPlaybackEnd }: UseAudioPl
     seekTo(0);
   }, [pause, seekTo]);
 
-  useEffect(() => () => cancelAnimationFrame(rafRef.current!), []);
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  }, []);
 
   return { play, pause, toggle, seekTo, reset } as const;
 };

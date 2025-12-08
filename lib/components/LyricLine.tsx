@@ -17,8 +17,7 @@ import { buildTranslationWordTimings, isRtlLanguage } from '@/lib/helpers/transl
 interface LyricLineProps {
   readonly item: LrcLine;
   readonly translationLang: Languages | null;
-  readonly index: number;
-  readonly activeIndex: number;
+  readonly isActive: boolean;
   readonly onLinePress: () => void;
   readonly lineWords: readonly WordEntry[];
   readonly currentTimeMs: SharedValue<number>;
@@ -28,17 +27,15 @@ interface LyricLineProps {
 const LyricLine: FC<LyricLineProps> = ({
   item,
   translationLang,
-  index,
-  activeIndex,
+  isActive,
   onLinePress,
   lineWords,
   currentTimeMs,
   onWordPress,
 }) => {
-  const isActive = index === activeIndex;
   const translation = useMemo(() => translationLang && item.translations[translationLang], [translationLang, item.translations]);
   const translationTimings = useMemo(() => buildTranslationWordTimings(translation?.text, lineWords), [translation?.text, lineWords]);
-  const direction = isRtlLanguage(translationLang) ? 'rtl' : 'ltr';
+  const direction = useMemo(() => isRtlLanguage(translationLang) ? 'rtl' : 'ltr', [translationLang]);
 
   const opacityStyle = useAnimatedStyle(() => ({
     opacity: withTiming(isActive ? 1 : OPACITY, { duration: OPACITY_TRANSITION_DURATION }),
@@ -96,7 +93,13 @@ const LyricLine: FC<LyricLineProps> = ({
 
 LyricLine.displayName = 'LyricLine';
 
-export default memo(LyricLine);
+const areEqual = (prev: LyricLineProps, next: LyricLineProps) =>
+  prev.isActive === next.isActive &&
+  prev.translationLang === next.translationLang &&
+  prev.item._id.$oid === next.item._id.$oid &&
+  prev.lineWords === next.lineWords;
+
+export default memo(LyricLine, areEqual);
 
 const styles = StyleSheet.create({
   container: {

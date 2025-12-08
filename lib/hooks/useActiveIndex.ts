@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useRef } from 'react';
 import { useActiveIndexStore } from '@/lib/store/store';
 import { findCurrentIndexByRichSync } from '@/lib/utils';
 import type { LrcLine, WordEntry } from '@/lib/types';
@@ -15,9 +15,18 @@ export const useActiveIndex = ({
   throttleMs = 50,
 }: UseActiveIndexOptions) => {
   const { currentTimeMs, setActiveIndex } = useActiveIndexStore();
-  const throttledTime = useMemo(() => Math.floor(currentTimeMs / throttleMs), [currentTimeMs, throttleMs]);
+  const lastIndexRef = useRef(-2);
+  const lastThrottledTimeRef = useRef(-1);
 
   useEffect(() => {
-    setActiveIndex(findCurrentIndexByRichSync(lineWordsMap, lyrics, currentTimeMs));
-  }, [throttledTime, lyrics, lineWordsMap, currentTimeMs, setActiveIndex]);
+    const throttledTime = Math.floor(currentTimeMs / throttleMs);
+    if (throttledTime === lastThrottledTimeRef.current) return;
+    lastThrottledTimeRef.current = throttledTime;
+
+    const newIndex = findCurrentIndexByRichSync(lineWordsMap, lyrics, currentTimeMs);
+    if (newIndex !== lastIndexRef.current) {
+      lastIndexRef.current = newIndex;
+      setActiveIndex(newIndex);
+    }
+  }, [currentTimeMs, throttleMs, lyrics, lineWordsMap, setActiveIndex]);
 };
