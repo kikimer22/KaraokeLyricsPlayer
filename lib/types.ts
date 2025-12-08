@@ -108,3 +108,13 @@ export interface SongData {
     }
   };
 }
+
+// ===================================
+
+export interface TextLineLayout {
+  readonly start: number;
+  readonly end: number;
+  readonly text: string;
+  readonly width: number;
+  readonly height: number;
+}

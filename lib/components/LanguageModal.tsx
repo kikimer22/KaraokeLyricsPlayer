@@ -1,31 +1,28 @@
 import { Modal, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
 import { type FC, memo, useCallback } from 'react';
 import type { Languages } from '@/lib/types';
+import { useLanguageModalStore } from '@/lib/store/store';
 
 interface LanguageModalProps {
-  isModalVisible: boolean;
-  setModalVisible: (visible: boolean) => void;
   actualLanguage: Languages;
   languages: Languages[];
-  translationLang: Languages | null;
-  setTranslationLang: (lang: Languages | null) => void;
 }
 
-const LanguageModal: FC<LanguageModalProps> = ({
-  isModalVisible,
-  setModalVisible,
-  actualLanguage,
-  languages,
-  translationLang,
-  setTranslationLang
-}) => {
+const LanguageModal: FC<LanguageModalProps> = ({ actualLanguage, languages }) => {
+  const {
+    isModalVisible,
+    setModalVisible,
+    translationLang,
+    setTranslationLang,
+  } = useLanguageModalStore();
+
   const handleClose = useCallback(() => {
     setModalVisible(false);
   }, [setModalVisible]);
 
   const handleSelect = useCallback((lang: Languages | null) => {
     setTranslationLang(lang);
-    handleClose()
+    handleClose();
   }, [setTranslationLang, handleClose]);
 
   return (

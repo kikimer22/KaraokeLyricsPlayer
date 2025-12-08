@@ -3,87 +3,131 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Play, Pause, SkipBack, SkipForward, Heart } from 'lucide-react-native';
 import { formatTime } from '@/lib/utils';
-import type { Languages } from '@/lib/types';
+import { usePlayerControlsStore } from '@/lib/store/store';
 
 interface PlayerControlsProps {
-  isPlaying: boolean;
-  onPlayPause: () => void;
-  currentTimeMs: number;
-  totalDurationMs: number;
-  onSeek: (value: number) => void;
-  setModalVisible: (value: boolean) => void;
-  translationLang: Languages | null;
+  readonly onPlayPause: () => void;
+  readonly onSeek: (value: number) => void;
+  readonly onSkipBack?: () => void;
+  readonly onSkipForward?: () => void;
 }
 
-const PlayerControls: FC<PlayerControlsProps> = ({
-  isPlaying,
-  onPlayPause,
-  currentTimeMs,
-  totalDurationMs,
-  onSeek,
-  setModalVisible,
-  translationLang
-}: PlayerControlsProps) => {
-  const [like, setLike] = useState(false);
+const PlayerControls: FC<PlayerControlsProps> = memo(
+  ({
+    onPlayPause,
+    onSeek,
+    onSkipBack,
+    onSkipForward,
+  }) => {
+    const [isLiked, setIsLiked] = useState(false);
+    const {
+      isPlaying,
+      currentTimeMs,
+      translationLang,
+      totalDurationMs,
+      setModalVisible,
+    } = usePlayerControlsStore();
 
-  const handleLike = useCallback(() => {
-    setLike(prev => !prev);
-  }, [setLike]);
+    const formattedCurrentTime = formatTime(currentTimeMs);
+    const formattedRemainingTime = formatTime(totalDurationMs - currentTimeMs);
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.sliderContainer}>
-        <Slider
-          style={styles.slider}
-          minimumValue={0}
-          maximumValue={totalDurationMs}
-          value={currentTimeMs}
-          onSlidingComplete={onSeek}
-          minimumTrackTintColor="#FFFFFF"
-          maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
-          thumbTintColor="#FFFFFF"
-          tapToSeek={true}
-        />
-        <View style={styles.timeContainer}>
-          <Text style={styles.timeText}>{formatTime(currentTimeMs)}</Text>
-          <Text style={styles.timeText}>-{formatTime(totalDurationMs - currentTimeMs)}</Text>
+    const handleModalOpen = useCallback(() => {
+      setModalVisible(true);
+    }, [setModalVisible]);
+
+    const handleLike = useCallback(() => {
+      setIsLiked((prev) => !prev);
+    }, []);
+
+    return (
+      <View style={styles.container}>
+        <View style={styles.sliderContainer}>
+          <Slider
+            style={styles.slider}
+            minimumValue={0}
+            maximumValue={totalDurationMs}
+            value={currentTimeMs}
+            onSlidingComplete={onSeek}
+            minimumTrackTintColor="#FFFFFF"
+            maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
+            thumbTintColor="#FFFFFF"
+            tapToSeek
+          />
+          <View style={styles.timeContainer}>
+            <Text style={styles.timeText}>{formattedCurrentTime}</Text>
+            <Text style={styles.timeText}>-{formattedRemainingTime}</Text>
+          </View>
+        </View>
+
+        <View style={styles.controls}>
+          {/* like */}
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={handleLike}
+            accessibilityLabel={isLiked ? 'Unlike' : 'Like'}
+            accessibilityRole="button"
+          >
+            <Heart
+              fill={isLiked ? '#FFF' : 'none'}
+              color="#FFF"
+              size={28}
+            />
+          </TouchableOpacity>
+
+          {/* back */}
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={onSkipBack}
+            disabled={!onSkipBack}
+            accessibilityLabel="Skip back"
+            accessibilityRole="button"
+          >
+            <SkipBack color="#FFF" size={28}/>
+          </TouchableOpacity>
+
+          {/* Play or Pause */}
+          <TouchableOpacity
+            style={styles.playBtn}
+            onPress={onPlayPause}
+            accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+            accessibilityRole="button"
+          >
+            {isPlaying ? (
+              <Pause color="#000" size={32} fill="#000"/>
+            ) : (
+              <Play color="#000" size={32} fill="#000" style={{ marginLeft: 4 }}/>
+            )}
+          </TouchableOpacity>
+
+          {/* next */}
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={onSkipForward}
+            disabled={!onSkipForward}
+            accessibilityLabel="Skip forward"
+            accessibilityRole="button"
+          >
+            <SkipForward color="#FFF" size={28}/>
+          </TouchableOpacity>
+
+          {/* translation */}
+          <TouchableOpacity
+            onPress={handleModalOpen}
+            style={styles.secondaryBtn}
+            accessibilityLabel="Translation settings"
+            accessibilityRole="button"
+          >
+            <Text style={styles.buttonText}>
+              {translationLang ? translationLang.toUpperCase() : 'CC'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
+    );
+  }
+);
 
-      <View style={styles.controls}>
-        <TouchableOpacity style={styles.secondaryBtn} onPress={handleLike}>
-          {like ? (
-            <Heart fill="#FFF" color="#FFF" size={28}/>
-          ) : (
-            <Heart color="#FFF" size={28}/>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.secondaryBtn}>
-          <SkipBack color="#FFF" size={28}/>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.playBtn} onPress={onPlayPause}>
-          {isPlaying ? (
-            <Pause color="#000" size={32} fill="#000"/>
-          ) : (
-            <Play color="#000" size={32} fill="#000" style={{ marginLeft: 4 }}/>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.secondaryBtn}>
-          <SkipForward color="#FFF" size={28}/>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.secondaryBtn}>
-          <Text style={styles.buttonText}>
-            {translationLang ? translationLang.toUpperCase() : 'CC'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
+PlayerControls.displayName = 'PlayerControls';
 
 const styles = StyleSheet.create({
   container: {
@@ -130,7 +174,7 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: 'bold',
     fontSize: 20,
-  }
+  },
 });
 
-export default memo(PlayerControls);
+export default PlayerControls;
