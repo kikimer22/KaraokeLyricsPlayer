@@ -36,7 +36,7 @@ const LanguageModal: FC<LanguageModalProps> = ({ actualLanguage, languages }) =>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Select Translation</Text>
 
-          <ScrollView style={{ maxHeight: 300 }}>
+          <ScrollView style={{ width: '100%', maxHeight: 300 }}>
             <TouchableOpacity
               style={[styles.modalOption, !translationLang && styles.selectedOption]}
               onPress={() => handleSelect(null)}

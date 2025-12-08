@@ -13,16 +13,20 @@ export const buildTranslationWordTimings = (
   if (!tokens.length) return [];
 
   const ratio = sourceWords.length / tokens.length;
+  const lastSourceWord = sourceWords[sourceWords.length - 1];
 
   return tokens.map((token, idx) => {
+    const isLast = idx === tokens.length - 1;
     const sourceIdx = Math.min(sourceWords.length - 1, Math.floor(idx * ratio));
     const source = sourceWords[sourceIdx];
+
     return {
       ...source,
       word: token,
       punctuatedWord: token,
       isEstimatedTiming: true,
-      isEndOfLine: idx === tokens.length - 1,
+      isEndOfLine: isLast,
+      end: isLast ? lastSourceWord.end : source.end,
     } as WordEntry;
   });
 };

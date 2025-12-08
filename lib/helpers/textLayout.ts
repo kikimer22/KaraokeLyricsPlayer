@@ -1,5 +1,7 @@
-import type { TextLayoutEventData } from 'react-native';
+import { Platform, type TextLayoutEventData } from 'react-native';
 import type { WordEntry } from '@/lib/types';
+
+const ANDROID_WIDTH_COMPENSATION = Platform.OS === 'android' ? 1.02 : 1;
 
 export interface LineLayout {
   readonly index: number;
@@ -109,7 +111,8 @@ export const parseTextLayoutLines = (lines?: TextLayoutEventData['lines']): read
   return lines.map((line, index) => {
     const startChar = offset;
     offset += line.text.length;
-    return { index, width: line.width, height: line.height, startChar, endChar: offset, x: line.x, y: line.y };
+    const compensatedWidth = line.width * ANDROID_WIDTH_COMPENSATION;
+    return { index, width: compensatedWidth, height: line.height, startChar, endChar: offset, x: line.x, y: line.y };
   });
 };
 

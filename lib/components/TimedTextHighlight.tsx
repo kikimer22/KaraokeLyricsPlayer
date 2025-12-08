@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import MaskedView from '@react-native-masked-view/masked-view';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,6 +7,8 @@ import type { TextStyle } from 'react-native';
 import type { WordEntry } from '@/lib/types';
 import { GRADIENT_COLORS, GRADIENT_OVERDRAW_PX, LYRIC_FONT_SIZE, LYRIC_LINE_HEIGHT } from '@/lib/constants';
 import { useTextHighlight, type LineLayout, type WordMapping } from '@/lib/hooks/useTextHighlight';
+
+const ANDROID_FULL_WIDTH_THRESHOLD = 0.98;
 
 interface HighlightLineProps {
   readonly line: LineLayout;
@@ -26,64 +28,98 @@ const HighlightLine = memo(({ line, direction, currentTimeMs, wordMappings, word
     const time = currentTimeMs.value;
     const { startChar, endChar, width } = line;
     const lineSpan = endChar - startChar;
+    const fullWidth = width + GRADIENT_OVERDRAW_PX;
 
-    let charPos = 0;
-    let found = false;
+    if (!words.length || !wordMappings.length || lineSpan <= 0) {
+      return { width: 0, opacity: 0 };
+    }
 
-    for (let i = 0; i < wordMappings.length; i++) {
-      const { word, startChar: wStart, endChar: wEnd } = wordMappings[i];
+    const lineWordMappings = wordMappings.filter(
+      (m) => m.startChar < endChar && m.endChar > startChar
+    );
+
+    if (!lineWordMappings.length) {
+      return { width: 0, opacity: 0 };
+    }
+
+    const firstLineWord = lineWordMappings[0].word;
+    const lastLineWord = lineWordMappings[lineWordMappings.length - 1].word;
+
+    if (time >= lastLineWord.end) {
+      return { width: fullWidth, opacity: 1 };
+    }
+
+    if (time < firstLineWord.start) {
+      return { width: 0, opacity: 0 };
+    }
+
+    let charPos = startChar;
+
+    for (let i = 0; i < lineWordMappings.length; i++) {
+      const mapping = lineWordMappings[i];
+      const { word, startChar: wStart, endChar: wEnd } = mapping;
       const duration = word.end - word.start;
 
       if (time < word.start) {
-        charPos = wStart;
-        found = true;
+        charPos = Math.max(startChar, wStart);
         break;
       }
 
       if (duration <= 1) {
-        if (time >= word.start) {
-          let groupEnd = wEnd;
-          let j = i + 1;
-          while (j < wordMappings.length) {
-            const next = wordMappings[j].word;
-            if (next.end - next.start <= 1 && next.start === word.start) {
-              groupEnd = wordMappings[j].endChar;
-              j++;
-            } else break;
-          }
-          if (j < wordMappings.length && time < wordMappings[j].word.start) {
-            charPos = groupEnd;
-            found = true;
+        let groupEnd = wEnd;
+        let j = i + 1;
+        while (j < lineWordMappings.length) {
+          const next = lineWordMappings[j].word;
+          if (next.end - next.start <= 1 && next.start === word.start) {
+            groupEnd = lineWordMappings[j].endChar;
+            j++;
+          } else break;
+        }
+
+        if (j < lineWordMappings.length) {
+          if (time < lineWordMappings[j].word.start) {
+            charPos = Math.min(endChar, groupEnd);
             break;
           }
+        } else {
+          charPos = Math.min(endChar, groupEnd);
+          break;
         }
+        i = j - 1;
         continue;
       }
 
       if (time >= word.end) {
-        charPos = wordMappings[i + 1]?.startChar ?? textLength;
+        if (i === lineWordMappings.length - 1) {
+          charPos = endChar;
+        } else {
+          charPos = Math.min(endChar, lineWordMappings[i + 1].startChar);
+        }
         continue;
       }
 
-      const progress = Math.min(1, (time - word.start) / duration);
-      charPos = wStart + (wEnd - wStart) * progress;
-      found = true;
+      const progress = (time - word.start) / duration;
+      const wordCharSpan = wEnd - wStart;
+      charPos = wStart + wordCharSpan * progress;
       break;
     }
 
-    if (!found && words.length && time >= words[words.length - 1]?.end) {
-      charPos = textLength;
-    }
+    charPos = Math.max(startChar, Math.min(endChar, charPos));
 
     if (charPos <= startChar) return { width: 0, opacity: 0 };
-    if (charPos >= endChar) return { width, opacity: 1 };
+    if (charPos >= endChar) return { width: fullWidth, opacity: 1 };
 
-    const ratio = lineSpan > 0 ? (charPos - startChar) / lineSpan : 0;
-    return { width: Math.min(width, width * ratio + GRADIENT_OVERDRAW_PX), opacity: 1 };
+    const ratio = (charPos - startChar) / lineSpan;
+
+    if (Platform.OS === 'android' && ratio >= ANDROID_FULL_WIDTH_THRESHOLD) {
+      return { width: fullWidth, opacity: 1 };
+    }
+
+    return { width: Math.min(fullWidth, width * ratio + GRADIENT_OVERDRAW_PX), opacity: 1 };
   }, [currentTimeMs, wordMappings, words, textLength, line]);
 
   return (
-    <Animated.View style={[styles.lineOverlay, { top: line.y, height: line.height, width: line.width, left: line.x }]}>
+    <Animated.View style={[styles.lineOverlay, { top: line.y, height: line.height, width: line.width + GRADIENT_OVERDRAW_PX, left: line.x }]}>
       <Animated.View style={[styles.gradientContainer, isRTL && styles.gradientRTL, animatedStyle]}>
         <LinearGradient
           colors={[...GRADIENT_COLORS]}
@@ -167,7 +203,7 @@ export default memo(TimedTextHighlight);
 
 const styles = StyleSheet.create({
   maskedView: { flexDirection: 'column', alignSelf: 'center' },
-  text: { fontSize: LYRIC_FONT_SIZE, color: '#FFF', fontWeight: '600', textAlign: 'center' },
+  text: { fontSize: LYRIC_FONT_SIZE, color: '#FFF', fontWeight: '600', textAlign: 'center', ...(Platform.OS === 'android' && { includeFontPadding: false }) },
   rtlText: { writingDirection: 'rtl' },
   lineOverlay: { position: 'absolute', overflow: 'hidden' },
   gradientContainer: { position: 'absolute', left: 0, top: 0, bottom: 0, overflow: 'hidden' },

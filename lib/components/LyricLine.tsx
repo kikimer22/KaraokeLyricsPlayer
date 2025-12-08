@@ -1,5 +1,5 @@
 import { type FC, memo, useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedStyle, withTiming, type SharedValue } from 'react-native-reanimated';
 import type { Languages, LrcLine, WordEntry } from '@/lib/types';
 import {
@@ -123,6 +123,7 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '600',
     textAlign: 'center',
+    ...(Platform.OS === 'android' && { includeFontPadding: false }),
   },
   translationText: {
     fontSize: TRANSLATION_FONT_SIZE,
@@ -130,5 +131,6 @@ const styles = StyleSheet.create({
     color: '#A0A0A0',
     fontWeight: '600',
     textAlign: 'center',
+    ...(Platform.OS === 'android' && { includeFontPadding: false }),
   },
 });
