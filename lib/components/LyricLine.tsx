@@ -1,53 +1,84 @@
 import { type FC, memo, useMemo } from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import type { Languages, LrcLine, WordEntry } from '@/lib/types';
-import { getOpacity } from '@/lib/utils';
-import { ITEM_HEIGHT, LYRIC_LINE_HEIGHT, OPACITY } from '@/lib/constants';
-import LineWordsHighlight from '@/lib/components/LineWordsHighlight';
+import {
+  ITEM_HEIGHT,
+  LYRIC_LINE_HEIGHT,
+  LYRIC_FONT_SIZE,
+  OPACITY,
+  OPACITY_TRANSITION_DURATION,
+  TRANSLATION_LINE_HEIGHT,
+  TRANSLATION_FONT_SIZE,
+} from '@/lib/constants';
+import TimedTextHighlight from '@/lib/components/TimedTextHighlight';
 import type { SharedValue } from 'react-native-reanimated';
-import TranslationHighlight from '@/lib/components/TranslationHighlight';
 
 interface LyricLineProps {
   readonly item: LrcLine;
   readonly translationLang: Languages | null;
   readonly index: number;
   readonly activeIndex: number;
-  readonly currentTimeMs: SharedValue<number>;
-  readonly lineWords: readonly WordEntry[];
-  readonly onWordPress: (timeMs: number) => void;
   readonly onLinePress: () => void;
+  readonly lineWords: readonly WordEntry[];
+  readonly currentTimeMs: SharedValue<number>;
+  readonly onWordPress: (timeMs: number) => void;
 }
+
+const buildTranslationWordTimings = (translationText: string | undefined, sourceWords: readonly WordEntry[]): WordEntry[] => {
+  if (!translationText?.trim() || sourceWords.length === 0) return [];
+
+  const tokens = translationText.trim().split(/\s+/);
+  if (!tokens.length) return [];
+
+  const ratio = sourceWords.length / tokens.length;
+
+  return tokens.map((token, idx) => {
+    const mappedIndex = Math.min(sourceWords.length - 1, Math.floor(idx * ratio));
+    const reference = sourceWords[mappedIndex];
+    return {
+      ...reference,
+      word: token,
+      punctuatedWord: token,
+      isEstimatedTiming: true,
+      isEndOfLine: idx === tokens.length - 1,
+    } as WordEntry;
+  });
+};
+
+const isRtlLanguage = (lang: Languages | null) => lang === 'he';
 
 const LyricLine: FC<LyricLineProps> = ({
   item,
   translationLang,
   index,
   activeIndex,
-  currentTimeMs,
-  lineWords,
-  onWordPress,
   onLinePress,
+  lineWords,
+  currentTimeMs,
+  onWordPress,
 }) => {
   const isActive = index === activeIndex;
-  const distance = Math.abs(index - activeIndex);
-  const opacity = useMemo(() => getOpacity(distance), [distance]);
 
   const translation = useMemo(
     () => (translationLang ? item.translations[translationLang] : null),
     [translationLang, item.translations]
   );
 
-  const containerStyle = useMemo(
-    () => [styles.itemContainer, { opacity }],
-    [opacity]
+  const translationWordTimings = useMemo(
+    () => buildTranslationWordTimings(translation?.text, lineWords),
+    [translation?.text, lineWords]
   );
 
-  const hasRichSync = lineWords.length > 0;
+  const writingDirection = isRtlLanguage(translationLang) ? 'rtl' : 'ltr';
 
-  // Web version - simple rendering without karaoke effect
-  if (Platform.OS === 'web') {
-    return (
-      <View style={containerStyle}>
+  const animatedOpacity = useAnimatedStyle(() => ({
+    opacity: withTiming(isActive ? 1 : OPACITY, { duration: OPACITY_TRANSITION_DURATION })
+  }), [isActive]);
+
+  const renderLineText = () => {
+    if (lineWords.length === 0 || !isActive) {
+      return (
         <TouchableOpacity
           onPress={onLinePress}
           activeOpacity={OPACITY}
@@ -57,42 +88,53 @@ const LyricLine: FC<LyricLineProps> = ({
             {item.line}
           </Text>
         </TouchableOpacity>
-        {translation && (
-          <Text style={styles.translationText}>{translation.text}</Text>
-        )}
-      </View>
-    );
-  }
+      );
+    }
 
-  // Native version - karaoke effect with word-level highlighting
+    return (
+      <TimedTextHighlight
+        text={item.line}
+        words={lineWords}
+        currentTimeMs={currentTimeMs}
+        onWordPress={onWordPress}
+        writingDirection="ltr"
+      />
+    );
+  };
+
+  const renderTranslation = () => {
+    if (!translation) return null;
+
+    if (!translationWordTimings.length || !isActive) {
+      return (
+        <TouchableOpacity
+          onPress={onLinePress}
+          activeOpacity={OPACITY}
+          style={styles.translationWrapper}
+        >
+          <Text style={styles.translationText}>{translation.text}</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <TimedTextHighlight
+        text={translation.text}
+        words={translationWordTimings}
+        currentTimeMs={currentTimeMs}
+        onWordPress={onWordPress}
+        writingDirection={writingDirection}
+        textStyle={styles.translationText}
+        lineHeight={TRANSLATION_LINE_HEIGHT}
+      />
+    );
+  };
+
   return (
-    <View style={containerStyle}>
-      <View style={styles.textWrapper}>
-        {isActive && hasRichSync ? (
-          <LineWordsHighlight
-            words={lineWords}
-            currentTimeMs={currentTimeMs}
-            onWordPress={onWordPress}
-          />
-        ) : (
-          <TouchableOpacity
-            onPress={onLinePress}
-            activeOpacity={OPACITY}
-          >
-            <Text style={styles.lyricTextStatic}>{item.line}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-      {translation && (
-        <TranslationHighlight
-          translation={translation.text}
-          originalWords={lineWords}
-          currentTimeMs={currentTimeMs}
-          isActive={isActive}
-          hasRichSync={hasRichSync}
-        />
-      )}
-    </View>
+    <Animated.View style={[styles.itemContainer, animatedOpacity]}>
+      <View style={styles.textWrapper}>{renderLineText()}</View>
+      {renderTranslation()}
+    </Animated.View>
   );
 };
 
@@ -106,51 +148,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   textWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    minHeight: LYRIC_LINE_HEIGHT,
     justifyContent: 'center',
+    alignItems: 'center',
     width: '100%',
-    flexWrap: 'wrap',
+  },
+  translationWrapper: {
+    minHeight: TRANSLATION_LINE_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
   },
   lyricTextStatic: {
-    fontSize: 32,
+    fontSize: LYRIC_FONT_SIZE,
     lineHeight: LYRIC_LINE_HEIGHT,
     color: '#FFF',
     fontWeight: '600',
     textAlign: 'center',
   },
   lyricTextActive: {
-    fontSize: 32,
+    fontSize: LYRIC_FONT_SIZE,
     lineHeight: LYRIC_LINE_HEIGHT,
     color: '#FFF',
     fontWeight: '600',
     textAlign: 'center',
   },
-  translationWrapper: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
   translationText: {
-    marginTop: 8,
-    fontSize: 20,
+    fontSize: TRANSLATION_FONT_SIZE,
+    lineHeight: TRANSLATION_LINE_HEIGHT,
     color: '#A0A0A0',
+    fontWeight: '600',
     textAlign: 'center',
-  },
-  translationWord: {
-    fontSize: 20,
-    color: '#A0A0A0',
   },
 });
 
-export default memo(LyricLine, (prevProps, nextProps) => {
-  return (
-    prevProps.item._id.$oid === nextProps.item._id.$oid &&
-    prevProps.translationLang === nextProps.translationLang &&
-    prevProps.index === nextProps.index &&
-    prevProps.activeIndex === nextProps.activeIndex &&
-    prevProps.currentTimeMs === nextProps.currentTimeMs &&
-    prevProps.lineWords === nextProps.lineWords
-  );
-});
+export default memo(LyricLine);

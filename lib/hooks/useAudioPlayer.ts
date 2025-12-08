@@ -24,8 +24,8 @@ export const useAudioPlayer = ({
   } = useAudioPlayerStore();
 
   const totalDurationMs = useMemo(
-    () => data.lrc.reduce((acc, l) => acc + l.duration, data.lrc[0].milliseconds),
-    [data.lrc]
+    () => Math.max(data.lrc.reduce((acc, l) => acc + l.duration, data.lrc[0].milliseconds), data.richSync.words[data.richSync.words.length - 1].end),
+    [data.lrc, data.richSync.words]
   );
   useEffect(() => {
     setTotalDurationMs(totalDurationMs);

@@ -1,3 +1,9 @@
 export const ITEM_HEIGHT = 260;
 export const OPACITY = 0.7;
 export const LYRIC_LINE_HEIGHT = 44;
+export const TRANSLATION_LINE_HEIGHT = 30;
+export const LYRIC_FONT_SIZE = 32;
+export const TRANSLATION_FONT_SIZE = 20;
+export const GRADIENT_COLORS = ['#FFD700', '#FFA500', '#FF6B35'] as const;
+export const GRADIENT_OVERDRAW_PX = 2;
+export const OPACITY_TRANSITION_DURATION = 200;

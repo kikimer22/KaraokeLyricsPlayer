@@ -6,6 +6,7 @@ interface UseAutoScrollOptions {
   enabled: boolean;
   viewPosition?: number;
   animated?: boolean;
+  scrollDelayMs?: number;
 }
 
 export const useAutoScroll = ({
@@ -13,38 +14,47 @@ export const useAutoScroll = ({
   enabled,
   viewPosition = 0.5,
   animated = true,
+  scrollDelayMs = 150,
 }: UseAutoScrollOptions) => {
   const flatListRef = useRef<FlatList>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScrolledIndexRef = useRef<number>(-2);
 
-  const scrollToIndex = useCallback(() => {
-    if (!enabled || activeIndex < 0 || !flatListRef.current) return;
+  const scrollToPosition = useCallback(() => {
+    if (!enabled || !flatListRef.current) return;
+    if (activeIndex === lastScrolledIndexRef.current) return;
 
     try {
-      flatListRef.current.scrollToIndex({
-        index: activeIndex,
-        animated,
-        viewPosition,
-      });
+      if (activeIndex < 0) {
+        flatListRef.current.scrollToOffset({ offset: 0, animated });
+      } else {
+        flatListRef.current.scrollToIndex({
+          index: activeIndex,
+          animated,
+          viewPosition,
+        });
+      }
+      lastScrolledIndexRef.current = activeIndex;
     } catch (error) {
-      console.warn('Scroll to index failed:', error);
+      console.warn('Auto scroll failed:', error);
     }
   }, [activeIndex, enabled, animated, viewPosition]);
 
   useEffect(() => {
-    // Debounce scroll to avoid too many calls
+    if (!enabled) return;
+
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
     }
 
-    scrollTimeoutRef.current = setTimeout(scrollToIndex, 50);
+    scrollTimeoutRef.current = setTimeout(scrollToPosition, scrollDelayMs);
 
     return () => {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
     };
-  }, [scrollToIndex]);
+  }, [enabled, scrollDelayMs, scrollToPosition]);
 
   return flatListRef;
 };

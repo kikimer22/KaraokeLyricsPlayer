@@ -32,41 +32,54 @@ export default function App() {
 
   const { play, toggle, seekTo } = useAudioPlayer({ data: SONG_DATA });
 
-  useActiveIndex({ lyrics: SONG_DATA.lrc });
+  const lineWordsMap = useMemo(
+    () => hasValidRichSync(SONG_DATA) ? createLineWordsLookup(SONG_DATA) : new Map(),
+    []
+  );
+
+  useActiveIndex({
+    lyrics: SONG_DATA.lrc,
+    lineWordsMap
+  });
 
   const flatListRef = useAutoScroll({
     activeIndex,
     enabled: !isUserScrolling,
   });
 
-  // Create shared value for current time (for animations)
   const currentTimeMsShared = useSharedValue(0);
 
-  // Update shared value when currentTimeMs changes (outside render)
   useEffect(() => {
     currentTimeMsShared.value = currentTimeMs;
   }, [currentTimeMs, currentTimeMsShared]);
 
-  // Create line-to-words mapping for richSync
-  const lineWordsMap = useMemo(
-    () => hasValidRichSync(SONG_DATA) ? createLineWordsLookup(SONG_DATA) : new Map(),
-    []
-  );
 
   const handleWordPress = useCallback(
     (timeMs: number) => {
+      currentTimeMsShared.value = timeMs;
       seekTo(timeMs);
       play();
     },
-    [seekTo, play]
+    [seekTo, play, currentTimeMsShared]
+  );
+
+  const handleSeek = useCallback(
+    (timeMs: number) => {
+      currentTimeMsShared.value = timeMs;
+      seekTo(timeMs);
+    },
+    [seekTo, currentTimeMsShared]
   );
 
   const handleLinePress = useCallback(
     (line: LrcLine) => {
-      seekTo(line.milliseconds);
+      const lineWords = getWordsForLine(lineWordsMap, line._id.$oid);
+      const seekTime = lineWords.length > 0 ? lineWords[0].start : line.milliseconds;
+
+      seekTo(seekTime);
       play();
     },
-    [seekTo, play]
+    [seekTo, play, lineWordsMap]
   );
 
   const handleScrollBeginDrag = useCallback(() => {
@@ -87,20 +100,20 @@ export default function App() {
           translationLang={translationLang}
           index={index}
           activeIndex={activeIndex}
-          currentTimeMs={currentTimeMsShared}
-          lineWords={lineWords}
-          onWordPress={handleWordPress}
           onLinePress={() => handleLinePress(item)}
+          lineWords={lineWords}
+          currentTimeMs={currentTimeMsShared}
+          onWordPress={handleWordPress}
         />
       );
     },
     [
       translationLang,
       activeIndex,
-      currentTimeMsShared,
       lineWordsMap,
-      handleWordPress,
       handleLinePress,
+      currentTimeMsShared,
+      handleWordPress,
     ]
   );
 
@@ -178,7 +191,7 @@ export default function App() {
             </MaskedView>
           )}
 
-          <PlayerControls onPlayPause={toggle} onSeek={seekTo} />
+          <PlayerControls onPlayPause={toggle} onSeek={handleSeek} />
 
           <LanguageModal
             actualLanguage={SONG_DATA.musixmatch.lyrics.lyrics_language}

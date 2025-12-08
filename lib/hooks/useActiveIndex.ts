@@ -1,26 +1,28 @@
 import { useEffect, useMemo } from 'react';
 import { useActiveIndexStore } from '@/lib/store/store';
-import { findCurrentIndex } from '@/lib/utils';
-import type { LrcLine } from '@/lib/types';
+import { findCurrentIndexByRichSync } from '@/lib/utils';
+import type { LrcLine, WordEntry } from '@/lib/types';
 
 interface UseActiveIndexOptions {
   lyrics: LrcLine[];
+  lineWordsMap: Map<string, WordEntry[]>;
   throttleMs?: number;
 }
 
 export const useActiveIndex = ({
   lyrics,
-  throttleMs = 1000
+  lineWordsMap,
+  throttleMs = 50
 }: UseActiveIndexOptions) => {
   const { currentTimeMs, setActiveIndex } = useActiveIndexStore();
 
-  const currentSecond = useMemo(
+  const throttledTime = useMemo(
     () => Math.floor(currentTimeMs / throttleMs),
     [currentTimeMs, throttleMs]
   );
 
   useEffect(() => {
-    const index = findCurrentIndex(lyrics, currentTimeMs);
+    const index = findCurrentIndexByRichSync(lineWordsMap, lyrics, currentTimeMs);
     setActiveIndex(index);
-  }, [currentSecond, lyrics, setActiveIndex]);
+  }, [throttledTime, lyrics, lineWordsMap, currentTimeMs, setActiveIndex]);
 };

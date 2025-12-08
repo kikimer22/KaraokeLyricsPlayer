@@ -20,6 +20,9 @@ const PlayerControls: FC<PlayerControlsProps> = memo(
     onSkipForward,
   }) => {
     const [isLiked, setIsLiked] = useState(false);
+    const [isSliding, setIsSliding] = useState(false);
+    const [sliderValue, setSliderValue] = useState(0);
+
     const {
       isPlaying,
       currentTimeMs,
@@ -28,8 +31,23 @@ const PlayerControls: FC<PlayerControlsProps> = memo(
       setModalVisible,
     } = usePlayerControlsStore();
 
-    const formattedCurrentTime = formatTime(currentTimeMs);
-    const formattedRemainingTime = formatTime(totalDurationMs - currentTimeMs);
+    const displayValue = isSliding ? sliderValue : currentTimeMs;
+    const formattedCurrentTime = formatTime(displayValue);
+    const formattedRemainingTime = formatTime(totalDurationMs - displayValue);
+
+    const handleSlidingStart = useCallback(() => {
+      setIsSliding(true);
+      setSliderValue(currentTimeMs);
+    }, [currentTimeMs]);
+
+    const handleValueChange = useCallback((value: number) => {
+      setSliderValue(value);
+    }, []);
+
+    const handleSlidingComplete = useCallback((value: number) => {
+      setIsSliding(false);
+      onSeek(value);
+    }, [onSeek]);
 
     const handleModalOpen = useCallback(() => {
       setModalVisible(true);
@@ -46,8 +64,10 @@ const PlayerControls: FC<PlayerControlsProps> = memo(
             style={styles.slider}
             minimumValue={0}
             maximumValue={totalDurationMs}
-            value={currentTimeMs}
-            onSlidingComplete={onSeek}
+            value={displayValue}
+            onSlidingStart={handleSlidingStart}
+            onValueChange={handleValueChange}
+            onSlidingComplete={handleSlidingComplete}
             minimumTrackTintColor="#FFFFFF"
             maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
             thumbTintColor="#FFFFFF"
