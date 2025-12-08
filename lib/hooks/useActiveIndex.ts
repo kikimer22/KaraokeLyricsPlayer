@@ -4,25 +4,20 @@ import { findCurrentIndexByRichSync } from '@/lib/utils';
 import type { LrcLine, WordEntry } from '@/lib/types';
 
 interface UseActiveIndexOptions {
-  lyrics: LrcLine[];
-  lineWordsMap: Map<string, WordEntry[]>;
-  throttleMs?: number;
+  readonly lyrics: readonly LrcLine[];
+  readonly lineWordsMap: Map<string, WordEntry[]>;
+  readonly throttleMs?: number;
 }
 
 export const useActiveIndex = ({
   lyrics,
   lineWordsMap,
-  throttleMs = 50
+  throttleMs = 50,
 }: UseActiveIndexOptions) => {
   const { currentTimeMs, setActiveIndex } = useActiveIndexStore();
-
-  const throttledTime = useMemo(
-    () => Math.floor(currentTimeMs / throttleMs),
-    [currentTimeMs, throttleMs]
-  );
+  const throttledTime = useMemo(() => Math.floor(currentTimeMs / throttleMs), [currentTimeMs, throttleMs]);
 
   useEffect(() => {
-    const index = findCurrentIndexByRichSync(lineWordsMap, lyrics, currentTimeMs);
-    setActiveIndex(index);
+    setActiveIndex(findCurrentIndexByRichSync(lineWordsMap, lyrics, currentTimeMs));
   }, [throttledTime, lyrics, lineWordsMap, currentTimeMs, setActiveIndex]);
 };

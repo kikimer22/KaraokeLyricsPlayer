@@ -7,3 +7,6 @@ export const TRANSLATION_FONT_SIZE = 20;
 export const GRADIENT_COLORS = ['#FFD700', '#FFA500', '#FF6B35'] as const;
 export const GRADIENT_OVERDRAW_PX = 2;
 export const OPACITY_TRANSITION_DURATION = 200;
+export const TICK_INTERVAL_MS = 50;
+export const RAF_THROTTLE_MS = 16;
+export const AUTO_SCROLL_DELAY_MS = 150;

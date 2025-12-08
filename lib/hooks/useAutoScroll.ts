@@ -1,12 +1,13 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { FlatList } from 'react-native';
+import { AUTO_SCROLL_DELAY_MS } from '@/lib/constants';
 
 interface UseAutoScrollOptions {
-  activeIndex: number;
-  enabled: boolean;
-  viewPosition?: number;
-  animated?: boolean;
-  scrollDelayMs?: number;
+  readonly activeIndex: number;
+  readonly enabled: boolean;
+  readonly viewPosition?: number;
+  readonly animated?: boolean;
+  readonly delayMs?: number;
 }
 
 export const useAutoScroll = ({
@@ -14,47 +15,35 @@ export const useAutoScroll = ({
   enabled,
   viewPosition = 0.5,
   animated = true,
-  scrollDelayMs = 150,
+  delayMs = AUTO_SCROLL_DELAY_MS,
 }: UseAutoScrollOptions) => {
-  const flatListRef = useRef<FlatList>(null);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastScrolledIndexRef = useRef<number>(-2);
+  const listRef = useRef<FlatList>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastIndexRef = useRef(-2);
 
-  const scrollToPosition = useCallback(() => {
-    if (!enabled || !flatListRef.current) return;
-    if (activeIndex === lastScrolledIndexRef.current) return;
+  const scrollTo = useCallback(() => {
+    if (!enabled || !listRef.current || activeIndex === lastIndexRef.current) return;
 
     try {
       if (activeIndex < 0) {
-        flatListRef.current.scrollToOffset({ offset: 0, animated });
+        listRef.current.scrollToOffset({ offset: 0, animated });
       } else {
-        flatListRef.current.scrollToIndex({
-          index: activeIndex,
-          animated,
-          viewPosition,
-        });
+        listRef.current.scrollToIndex({ index: activeIndex, animated, viewPosition });
       }
-      lastScrolledIndexRef.current = activeIndex;
-    } catch (error) {
-      console.warn('Auto scroll failed:', error);
+      lastIndexRef.current = activeIndex;
+    } catch {
+      // Scroll failed silently
     }
   }, [activeIndex, enabled, animated, viewPosition]);
 
   useEffect(() => {
     if (!enabled) return;
 
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-
-    scrollTimeoutRef.current = setTimeout(scrollToPosition, scrollDelayMs);
-
+    timeoutRef.current = setTimeout(scrollTo, delayMs);
     return () => {
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [enabled, scrollDelayMs, scrollToPosition]);
+  }, [enabled, delayMs, scrollTo]);
 
-  return flatListRef;
+  return listRef;
 };

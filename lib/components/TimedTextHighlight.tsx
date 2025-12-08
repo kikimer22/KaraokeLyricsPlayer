@@ -1,81 +1,12 @@
-import { memo, useCallback, useMemo, useState } from 'react';
-import { I18nManager, Pressable, StyleSheet, Text, View, type NativeSyntheticEvent, type TextLayoutEventData, type TextStyle } from 'react-native';
+import { memo } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MaskedView from '@react-native-masked-view/masked-view';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import type { TextStyle } from 'react-native';
 import type { WordEntry } from '@/lib/types';
 import { GRADIENT_COLORS, GRADIENT_OVERDRAW_PX, LYRIC_FONT_SIZE, LYRIC_LINE_HEIGHT } from '@/lib/constants';
-
-interface LineLayout {
-  readonly index: number;
-  readonly width: number;
-  readonly height: number;
-  readonly startChar: number;
-  readonly endChar: number;
-  readonly x: number;
-  readonly y: number;
-}
-
-interface WordMapping {
-  readonly index: number;
-  readonly word: WordEntry;
-  readonly startChar: number;
-  readonly endChar: number;
-  readonly text: string;
-}
-
-interface TimedTextHighlightProps {
-  readonly text: string;
-  readonly words: readonly WordEntry[];
-  readonly currentTimeMs: SharedValue<number>;
-  readonly onWordPress: (timeMs: number) => void;
-  readonly textStyle?: TextStyle;
-  readonly writingDirection?: 'rtl' | 'ltr';
-  readonly lineHeight?: number;
-}
-
-const mapWordsToChars = (text: string, words: readonly WordEntry[]): readonly WordMapping[] => {
-  if (!text.length || words.length === 0) return [];
-
-  let cursor = 0;
-  return words.map((word, index) => {
-    const token = word.punctuatedWord || word.word;
-    const location = token.length ? text.indexOf(token, cursor) : -1;
-    const startChar = location >= 0 ? location : cursor;
-    const endChar = startChar + token.length;
-
-    cursor = Math.max(endChar, cursor + token.length + 1);
-
-    return {
-      index,
-      word,
-      startChar,
-      endChar,
-      text: token,
-    };
-  });
-};
-
-const parseLines = (lines?: TextLayoutEventData['lines']): readonly LineLayout[] => {
-  if (!lines?.length) return [];
-
-  let charOffset = 0;
-  return lines.map((line, index) => {
-    const startChar = charOffset;
-    const endChar = startChar + line.text.length;
-    charOffset = endChar;
-
-    return {
-      index,
-      width: line.width,
-      height: line.height,
-      startChar,
-      endChar,
-      x: line.x,
-      y: line.y,
-    };
-  });
-};
+import { useTextHighlight, type LineLayout, type WordMapping } from '@/lib/hooks/useTextHighlight';
 
 interface HighlightLineProps {
   readonly line: LineLayout;
@@ -87,71 +18,77 @@ interface HighlightLineProps {
 }
 
 const HighlightLine = memo(({ line, direction, currentTimeMs, wordMappings, words, textLength }: HighlightLineProps) => {
+  const isRTL = direction === 'rtl';
+
   const animatedStyle = useAnimatedStyle(() => {
     'worklet';
 
     const time = currentTimeMs.value;
-    let charPosition = 0;
-
-    for (let i = 0; i < wordMappings.length; i++) {
-      const mapping = wordMappings[i];
-      const word = mapping.word;
-
-      if (time < word.start) {
-        charPosition = mapping.startChar;
-        break;
-      }
-
-      if (time >= word.end) {
-        const nextMapping = wordMappings[i + 1];
-        charPosition = nextMapping ? nextMapping.startChar : textLength;
-        continue;
-      }
-
-      const duration = Math.max(1, word.end - word.start);
-      const progress = Math.max(0, Math.min(1, (time - word.start) / duration));
-      const span = mapping.endChar - mapping.startChar;
-      charPosition = mapping.startChar + span * progress;
-      break;
-    }
-
-    if (time >= words[words.length - 1]?.end) charPosition = textLength;
-
     const { startChar, endChar, width } = line;
     const lineSpan = endChar - startChar;
 
-    if (charPosition <= startChar) return { width: 0, opacity: 0 };
-    if (charPosition >= endChar) return { width, opacity: 1 };
+    let charPos = 0;
+    let found = false;
 
-    const filled = charPosition - startChar;
-    const ratio = lineSpan > 0 ? filled / lineSpan : 0;
-    const widthValue = Math.min(width, width * ratio + GRADIENT_OVERDRAW_PX);
-    return { width: widthValue, opacity: 1 };
+    for (let i = 0; i < wordMappings.length; i++) {
+      const { word, startChar: wStart, endChar: wEnd } = wordMappings[i];
+      const duration = word.end - word.start;
+
+      if (time < word.start) {
+        charPos = wStart;
+        found = true;
+        break;
+      }
+
+      if (duration <= 1) {
+        if (time >= word.start) {
+          let groupEnd = wEnd;
+          let j = i + 1;
+          while (j < wordMappings.length) {
+            const next = wordMappings[j].word;
+            if (next.end - next.start <= 1 && next.start === word.start) {
+              groupEnd = wordMappings[j].endChar;
+              j++;
+            } else break;
+          }
+          if (j < wordMappings.length && time < wordMappings[j].word.start) {
+            charPos = groupEnd;
+            found = true;
+            break;
+          }
+        }
+        continue;
+      }
+
+      if (time >= word.end) {
+        charPos = wordMappings[i + 1]?.startChar ?? textLength;
+        continue;
+      }
+
+      const progress = Math.min(1, (time - word.start) / duration);
+      charPos = wStart + (wEnd - wStart) * progress;
+      found = true;
+      break;
+    }
+
+    if (!found && words.length && time >= words[words.length - 1]?.end) {
+      charPos = textLength;
+    }
+
+    if (charPos <= startChar) return { width: 0, opacity: 0 };
+    if (charPos >= endChar) return { width, opacity: 1 };
+
+    const ratio = lineSpan > 0 ? (charPos - startChar) / lineSpan : 0;
+    return { width: Math.min(width, width * ratio + GRADIENT_OVERDRAW_PX), opacity: 1 };
   }, [currentTimeMs, wordMappings, words, textLength, line]);
 
   return (
-    <Animated.View
-      style={[
-        styles.lineOverlay,
-        {
-          top: line.y,
-          height: line.height,
-          width: line.width,
-          left: line.x,
-        },
-      ]}
-    >
-      <Animated.View
-        style={[
-          styles.gradientContainer,
-          direction === 'rtl' && styles.gradientRTL,
-          animatedStyle,
-        ]}
-      >
+    <Animated.View style={[styles.lineOverlay, { top: line.y, height: line.height, width: line.width, left: line.x }]}>
+      <Animated.View style={[styles.gradientContainer, isRTL && styles.gradientRTL, animatedStyle]}>
         <LinearGradient
           colors={[...GRADIENT_COLORS]}
-          start={{ x: direction === 'rtl' ? 1 : 0, y: 0 }}
-          end={{ x: direction === 'rtl' ? 0 : 1, y: 0 }}
+          start={{ x: isRTL ? 1 : 0, y: 0 }}
+          end={{ x: isRTL ? 0 : 1, y: 0 }}
           style={styles.gradient}
         />
       </Animated.View>
@@ -160,6 +97,16 @@ const HighlightLine = memo(({ line, direction, currentTimeMs, wordMappings, word
 });
 
 HighlightLine.displayName = 'HighlightLine';
+
+interface TimedTextHighlightProps {
+  readonly text: string;
+  readonly words: readonly WordEntry[];
+  readonly currentTimeMs: SharedValue<number>;
+  readonly onWordPress: (timeMs: number) => void;
+  readonly textStyle?: TextStyle;
+  readonly writingDirection?: 'rtl' | 'ltr';
+  readonly lineHeight?: number;
+}
 
 const TimedTextHighlight = ({
   text,
@@ -170,150 +117,38 @@ const TimedTextHighlight = ({
   writingDirection,
   lineHeight = LYRIC_LINE_HEIGHT,
 }: TimedTextHighlightProps) => {
-  const [lines, setLines] = useState<readonly LineLayout[]>([]);
-  const [ready, setReady] = useState(false);
-
-  const resolvedDirection = writingDirection || (I18nManager.isRTL ? 'rtl' : 'ltr');
-  const displayText = useMemo(() => text.trim(), [text]);
-  const textLength = displayText.length;
-
-  const wordMappings = useMemo(() => mapWordsToChars(displayText, words), [displayText, words]);
-
-  const handleLayout = useCallback((event: NativeSyntheticEvent<TextLayoutEventData>) => {
-    setLines(parseLines(event.nativeEvent.lines));
-    setReady(true);
-  }, []);
-
-  const getLineAt = useCallback((y: number) => {
-    if (!lines.length) return null;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const lineTop = line.y;
-      const lineBottom = line.y + line.height;
-
-      if (y >= lineTop && y < lineBottom) {
-        return line;
-      }
-    }
-
-    if (y < lines[0].y) return lines[0];
-    return lines[lines.length - 1];
-  }, [lines]);
-
-  const estimateChar = useCallback((x: number, line: LineLayout) => {
-    const relativeX = x - line.x;
-    const width = Math.max(1, line.width);
-    const normalized = Math.max(0, Math.min(1, relativeX / width));
-    const directional = resolvedDirection === 'rtl' ? 1 - normalized : normalized;
-    const span = line.endChar - line.startChar;
-    return Math.floor(line.startChar + span * directional);
-  }, [resolvedDirection]);
-
-  const findClosestWord = useCallback((charPosition: number, line: LineLayout, mappings: readonly WordMapping[]) => {
-    const lineWords = mappings.filter(
-      (m) => m.endChar > line.startChar && m.startChar < line.endChar
-    );
-
-    if (!lineWords.length) return mappings[0];
-
-    const exactMatch = lineWords.find(
-      (m) => charPosition >= m.startChar && charPosition < m.endChar
-    );
-    if (exactMatch) return exactMatch;
-
-    let closest = lineWords[0];
-    let minDistance = Infinity;
-
-    for (const mapping of lineWords) {
-      const distToStart = Math.abs(charPosition - mapping.startChar);
-      const distToEnd = Math.abs(charPosition - mapping.endChar);
-      const dist = Math.min(distToStart, distToEnd);
-
-      if (dist < minDistance) {
-        minDistance = dist;
-        closest = mapping;
-      }
-    }
-
-    return closest;
-  }, []);
-
-  const handlePress = useCallback((event: { nativeEvent: { locationX: number; locationY: number } }) => {
-    if (!ready || !lines.length || !wordMappings.length) {
-      if (words.length) {
-        currentTimeMs.value = words[0].start;
-        onWordPress(words[0].start);
-      }
-      return;
-    }
-
-    const { locationX, locationY } = event.nativeEvent;
-    const line = getLineAt(locationY);
-
-    if (!line) {
-      currentTimeMs.value = words[0].start;
-      onWordPress(words[0].start);
-      return;
-    }
-
-    const charPosition = estimateChar(locationX, line);
-    const word = findClosestWord(charPosition, line, wordMappings);
-    const targetStart = word.word.start;
-
-    currentTimeMs.value = targetStart;
-    onWordPress(targetStart);
-  }, [ready, lines, wordMappings, words, getLineAt, estimateChar, findClosestWord, onWordPress, currentTimeMs]);
+  const { lines, ready, displayText, textLength, wordMappings, resolvedDirection, handleLayout, handlePress } =
+    useTextHighlight({ text, words, currentTimeMs, onWordPress, writingDirection });
 
   if (!words.length || !displayText.length) {
     return <Text style={[styles.text, textStyle]}>{text}</Text>;
   }
 
-  const baseText = (
-    <Text
-      style={[
-        styles.text,
-        { lineHeight },
-        textStyle,
-        resolvedDirection === 'rtl' && styles.rtlText,
-      ]}
-      onTextLayout={ready ? undefined : handleLayout}
-    >
-      {displayText}
-    </Text>
-  );
+  const textStyles = [styles.text, { lineHeight }, textStyle, resolvedDirection === 'rtl' && styles.rtlText];
+
+  const onPressHandler = ({ nativeEvent: { locationX, locationY } }: { nativeEvent: { locationX: number; locationY: number } }) => {
+    handlePress(locationX, locationY);
+  };
 
   if (!ready) {
     return (
-      <Pressable onPress={handlePress}>
-        {baseText}
+      <Pressable onPress={onPressHandler}>
+        <Text style={textStyles} onTextLayout={handleLayout}>{displayText}</Text>
       </Pressable>
     );
   }
 
   return (
-    <Pressable onPress={handlePress}>
+    <Pressable onPress={onPressHandler}>
       <MaskedView
         style={styles.maskedView}
-        maskElement={(
-          <Text
-            style={[
-              styles.text,
-              { lineHeight },
-              textStyle,
-              resolvedDirection === 'rtl' && styles.rtlText,
-            ]}
-            onTextLayout={handleLayout}
-          >
-            {displayText}
-          </Text>
-        )}
+        maskElement={<Text style={textStyles} onTextLayout={handleLayout}>{displayText}</Text>}
       >
-        {baseText}
+        <Text style={textStyles}>{displayText}</Text>
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           {lines.map((line) => (
             <HighlightLine
-              key={`line-${line.index}`}
+              key={line.index}
               line={line}
               direction={resolvedDirection}
               currentTimeMs={currentTimeMs}
@@ -331,37 +166,11 @@ const TimedTextHighlight = ({
 export default memo(TimedTextHighlight);
 
 const styles = StyleSheet.create({
-  maskedView: {
-    flexDirection: 'column',
-    alignSelf: 'center',
-  },
-  text: {
-    fontSize: LYRIC_FONT_SIZE,
-    color: '#FFF',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  rtlText: {
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  lineOverlay: {
-    position: 'absolute',
-    overflow: 'hidden',
-  },
-  gradientContainer: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    overflow: 'hidden',
-  },
-  gradientRTL: {
-    left: undefined,
-    right: 0,
-  },
-  gradient: {
-    width: '100%',
-    height: '100%',
-  },
+  maskedView: { flexDirection: 'column', alignSelf: 'center' },
+  text: { fontSize: LYRIC_FONT_SIZE, color: '#FFF', fontWeight: '600', textAlign: 'center' },
+  rtlText: { writingDirection: 'rtl' },
+  lineOverlay: { position: 'absolute', overflow: 'hidden' },
+  gradientContainer: { position: 'absolute', left: 0, top: 0, bottom: 0, overflow: 'hidden' },
+  gradientRTL: { left: undefined, right: 0 },
+  gradient: { width: '100%', height: '100%' },
 });

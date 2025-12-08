@@ -1,6 +1,6 @@
 import { type FC, memo, useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming, type SharedValue } from 'react-native-reanimated';
 import type { Languages, LrcLine, WordEntry } from '@/lib/types';
 import {
   ITEM_HEIGHT,
@@ -12,7 +12,7 @@ import {
   TRANSLATION_FONT_SIZE,
 } from '@/lib/constants';
 import TimedTextHighlight from '@/lib/components/TimedTextHighlight';
-import type { SharedValue } from 'react-native-reanimated';
+import { buildTranslationWordTimings, isRtlLanguage } from '@/lib/helpers/translation';
 
 interface LyricLineProps {
   readonly item: LrcLine;
@@ -25,29 +25,6 @@ interface LyricLineProps {
   readonly onWordPress: (timeMs: number) => void;
 }
 
-const buildTranslationWordTimings = (translationText: string | undefined, sourceWords: readonly WordEntry[]): WordEntry[] => {
-  if (!translationText?.trim() || sourceWords.length === 0) return [];
-
-  const tokens = translationText.trim().split(/\s+/);
-  if (!tokens.length) return [];
-
-  const ratio = sourceWords.length / tokens.length;
-
-  return tokens.map((token, idx) => {
-    const mappedIndex = Math.min(sourceWords.length - 1, Math.floor(idx * ratio));
-    const reference = sourceWords[mappedIndex];
-    return {
-      ...reference,
-      word: token,
-      punctuatedWord: token,
-      isEstimatedTiming: true,
-      isEndOfLine: idx === tokens.length - 1,
-    } as WordEntry;
-  });
-};
-
-const isRtlLanguage = (lang: Languages | null) => lang === 'he';
-
 const LyricLine: FC<LyricLineProps> = ({
   item,
   translationLang,
@@ -59,38 +36,22 @@ const LyricLine: FC<LyricLineProps> = ({
   onWordPress,
 }) => {
   const isActive = index === activeIndex;
+  const translation = useMemo(() => translationLang && item.translations[translationLang], [translationLang, item.translations]);
+  const translationTimings = useMemo(() => buildTranslationWordTimings(translation?.text, lineWords), [translation?.text, lineWords]);
+  const direction = isRtlLanguage(translationLang) ? 'rtl' : 'ltr';
 
-  const translation = useMemo(
-    () => (translationLang ? item.translations[translationLang] : null),
-    [translationLang, item.translations]
-  );
-
-  const translationWordTimings = useMemo(
-    () => buildTranslationWordTimings(translation?.text, lineWords),
-    [translation?.text, lineWords]
-  );
-
-  const writingDirection = isRtlLanguage(translationLang) ? 'rtl' : 'ltr';
-
-  const animatedOpacity = useAnimatedStyle(() => ({
-    opacity: withTiming(isActive ? 1 : OPACITY, { duration: OPACITY_TRANSITION_DURATION })
+  const opacityStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(isActive ? 1 : OPACITY, { duration: OPACITY_TRANSITION_DURATION }),
   }), [isActive]);
 
-  const renderLineText = () => {
-    if (lineWords.length === 0 || !isActive) {
+  const renderLyric = () => {
+    if (!lineWords.length || !isActive) {
       return (
-        <TouchableOpacity
-          onPress={onLinePress}
-          activeOpacity={OPACITY}
-          style={styles.textWrapper}
-        >
-          <Text style={isActive ? styles.lyricTextActive : styles.lyricTextStatic}>
-            {item.line}
-          </Text>
+        <TouchableOpacity onPress={onLinePress} activeOpacity={OPACITY} style={styles.textWrapper}>
+          <Text style={styles.lyricText}>{item.line}</Text>
         </TouchableOpacity>
       );
     }
-
     return (
       <TimedTextHighlight
         text={item.line}
@@ -105,25 +66,20 @@ const LyricLine: FC<LyricLineProps> = ({
   const renderTranslation = () => {
     if (!translation) return null;
 
-    if (!translationWordTimings.length || !isActive) {
+    if (!translationTimings.length || !isActive) {
       return (
-        <TouchableOpacity
-          onPress={onLinePress}
-          activeOpacity={OPACITY}
-          style={styles.translationWrapper}
-        >
+        <TouchableOpacity onPress={onLinePress} activeOpacity={OPACITY} style={styles.translationWrapper}>
           <Text style={styles.translationText}>{translation.text}</Text>
         </TouchableOpacity>
       );
     }
-
     return (
       <TimedTextHighlight
         text={translation.text}
-        words={translationWordTimings}
+        words={translationTimings}
         currentTimeMs={currentTimeMs}
         onWordPress={onWordPress}
-        writingDirection={writingDirection}
+        writingDirection={direction}
         textStyle={styles.translationText}
         lineHeight={TRANSLATION_LINE_HEIGHT}
       />
@@ -131,8 +87,8 @@ const LyricLine: FC<LyricLineProps> = ({
   };
 
   return (
-    <Animated.View style={[styles.itemContainer, animatedOpacity]}>
-      <View style={styles.textWrapper}>{renderLineText()}</View>
+    <Animated.View style={[styles.container, opacityStyle]}>
+      <View style={styles.textWrapper}>{renderLyric()}</View>
       {renderTranslation()}
     </Animated.View>
   );
@@ -140,8 +96,10 @@ const LyricLine: FC<LyricLineProps> = ({
 
 LyricLine.displayName = 'LyricLine';
 
+export default memo(LyricLine);
+
 const styles = StyleSheet.create({
-  itemContainer: {
+  container: {
     minHeight: ITEM_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
@@ -159,14 +117,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
-  lyricTextStatic: {
-    fontSize: LYRIC_FONT_SIZE,
-    lineHeight: LYRIC_LINE_HEIGHT,
-    color: '#FFF',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  lyricTextActive: {
+  lyricText: {
     fontSize: LYRIC_FONT_SIZE,
     lineHeight: LYRIC_LINE_HEIGHT,
     color: '#FFF',
@@ -181,5 +132,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-
-export default memo(LyricLine);
