@@ -1,33 +1,35 @@
-import { type FC, memo, useState, useCallback, useMemo } from 'react';
-import {
-  Platform,
-  Text,
-  TouchableOpacity,
-  View,
-  StyleSheet,
-  type NativeSyntheticEvent,
-  type TextLayoutEventData,
-} from 'react-native';
-import type { SharedValue } from 'react-native-reanimated';
-
-import type { Languages, LrcLine, TextLineLayout } from '@/lib/types';
+import { type FC, memo, useMemo } from 'react';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import type { Languages, LrcLine, WordEntry } from '@/lib/types';
 import { getOpacity } from '@/lib/utils';
 import { ITEM_HEIGHT, LYRIC_LINE_HEIGHT, OPACITY } from '@/lib/constants';
-import TextHighlight from '@/lib/components/TextHighlight';
+import LineWordsHighlight from '@/lib/components/LineWordsHighlight';
+import type { SharedValue } from 'react-native-reanimated';
+import TranslationHighlight from '@/lib/components/TranslationHighlight';
 
 interface LyricLineProps {
   readonly item: LrcLine;
   readonly translationLang: Languages | null;
   readonly index: number;
   readonly activeIndex: number;
-  readonly progress: SharedValue<number>;
-  readonly onPress: () => void;
+  readonly currentTimeMs: SharedValue<number>;
+  readonly lineWords: readonly WordEntry[];
+  readonly onWordPress: (timeMs: number) => void;
+  readonly onLinePress: () => void;
 }
 
-const LyricLine: FC<LyricLineProps> = ({ item, translationLang, index, activeIndex, progress, onPress }) => {
+const LyricLine: FC<LyricLineProps> = ({
+  item,
+  translationLang,
+  index,
+  activeIndex,
+  currentTimeMs,
+  lineWords,
+  onWordPress,
+  onLinePress,
+}) => {
   const isActive = index === activeIndex;
   const distance = Math.abs(index - activeIndex);
-
   const opacity = useMemo(() => getOpacity(distance), [distance]);
 
   const translation = useMemo(
@@ -35,85 +37,23 @@ const LyricLine: FC<LyricLineProps> = ({ item, translationLang, index, activeInd
     [translationLang, item.translations]
   );
 
-  const [textLines, setTextLines] = useState<readonly TextLineLayout[]>([]);
-
-  const handleTextLayout = useCallback(
-    (event: NativeSyntheticEvent<TextLayoutEventData>) => {
-      const { lines } = event.nativeEvent;
-
-      if (!lines?.length) {
-        setTextLines([]);
-        return;
-      }
-
-      const fullText = item.line;
-      let textOffset = 0;
-
-      const lineLayouts: TextLineLayout[] = lines.map((line) => {
-        const lineText = (line as unknown as { text?: string }).text;
-        const lineWidth = line.width;
-
-        let start: number;
-        let end: number;
-        let text: string;
-
-        if (lineText) {
-          start = textOffset;
-          end = start + lineText.length;
-          text = lineText;
-          textOffset = end;
-
-          // Skip whitespace
-          while (
-            textOffset < fullText.length &&
-            (fullText[textOffset] === ' ' || fullText[textOffset] === '\n')
-            ) {
-            textOffset += 1;
-          }
-        } else {
-          // Fallback estimation
-          const avgCharWidth = lineWidth / Math.max(1, lineWidth / 20);
-          const estimatedChars = Math.floor(lineWidth / avgCharWidth);
-
-          start = textOffset;
-          end = Math.min(start + estimatedChars, fullText.length);
-          text = fullText.substring(start, end);
-          textOffset = end;
-        }
-
-        return {
-          start,
-          end,
-          text: text.trim() || fullText.substring(start, end),
-          width: lineWidth,
-          height: line.height,
-        };
-      });
-
-      setTextLines(lineLayouts);
-    },
-    [item.line]
-  );
-
   const containerStyle = useMemo(
     () => [styles.itemContainer, { opacity }],
     [opacity]
   );
 
-  // Web version - simple rendering
+  const hasRichSync = lineWords.length > 0;
+
+  // Web version - simple rendering without karaoke effect
   if (Platform.OS === 'web') {
     return (
       <View style={containerStyle}>
         <TouchableOpacity
-          onPress={onPress}
+          onPress={onLinePress}
           activeOpacity={OPACITY}
           style={styles.textWrapper}
         >
-          <Text
-            style={
-              isActive ? styles.lyricTextActive : styles.lyricTextStatic
-            }
-          >
+          <Text style={isActive ? styles.lyricTextActive : styles.lyricTextStatic}>
             {item.line}
           </Text>
         </TouchableOpacity>
@@ -124,26 +64,34 @@ const LyricLine: FC<LyricLineProps> = ({ item, translationLang, index, activeInd
     );
   }
 
-  // Native version - karaoke effect
+  // Native version - karaoke effect with word-level highlighting
   return (
     <View style={containerStyle}>
-      <TouchableOpacity
-        onPress={onPress}
-        activeOpacity={OPACITY}
-        style={styles.textWrapper}
-      >
-        {isActive ? (
-          <TextHighlight
-            text={item.line}
-            textLines={textLines}
-            progress={progress}
-            onTextLayout={handleTextLayout}
+      <View style={styles.textWrapper}>
+        {isActive && hasRichSync ? (
+          <LineWordsHighlight
+            words={lineWords}
+            currentTimeMs={currentTimeMs}
+            onWordPress={onWordPress}
           />
         ) : (
-          <Text style={styles.lyricTextStatic}>{item.line}</Text>
+          <TouchableOpacity
+            onPress={onLinePress}
+            activeOpacity={OPACITY}
+          >
+            <Text style={styles.lyricTextStatic}>{item.line}</Text>
+          </TouchableOpacity>
         )}
-      </TouchableOpacity>
-      {translation && <Text style={styles.translationText}>{translation.text}</Text>}
+      </View>
+      {translation && (
+        <TranslationHighlight
+          translation={translation.text}
+          originalWords={lineWords}
+          currentTimeMs={currentTimeMs}
+          isActive={isActive}
+          hasRichSync={hasRichSync}
+        />
+      )}
     </View>
   );
 };
@@ -162,6 +110,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+    flexWrap: 'wrap',
   },
   lyricTextStatic: {
     fontSize: 32,
@@ -177,11 +126,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  translationWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
   translationText: {
     marginTop: 8,
     fontSize: 20,
     color: '#A0A0A0',
     textAlign: 'center',
+  },
+  translationWord: {
+    fontSize: 20,
+    color: '#A0A0A0',
   },
 });
 
@@ -191,6 +150,7 @@ export default memo(LyricLine, (prevProps, nextProps) => {
     prevProps.translationLang === nextProps.translationLang &&
     prevProps.index === nextProps.index &&
     prevProps.activeIndex === nextProps.activeIndex &&
-    prevProps.progress === nextProps.progress
+    prevProps.currentTimeMs === nextProps.currentTimeMs &&
+    prevProps.lineWords === nextProps.lineWords
   );
 });

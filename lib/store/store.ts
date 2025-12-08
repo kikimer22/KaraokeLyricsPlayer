@@ -42,70 +42,61 @@ const usePlayerStore = create<PlayerState>((set) => ({
   setIsUserScrolling: (scrolling) => set({ isUserScrolling: scrolling }),
 }));
 
-export const useAppStore = () => usePlayerStore(useShallow(({
-  translationLang,
-  activeIndex,
-  isUserScrolling,
-  setIsUserScrolling,
-}) => ({
-  translationLang,
-  activeIndex,
-  isUserScrolling,
-  setIsUserScrolling,
-})));
+export const useAppStore = () =>
+  usePlayerStore(
+    useShallow(({ translationLang, activeIndex, isUserScrolling, currentTimeMs, setIsUserScrolling }) => ({
+      translationLang,
+      activeIndex,
+      isUserScrolling,
+      currentTimeMs,
+      setIsUserScrolling,
+    }))
+  );
 
-export const useAudioPlayerStore = () => usePlayerStore(useShallow(({
-  isPlaying,
-  setIsPlaying,
-  setCurrentTimeMs,
-  setTotalDurationMs
-}) => ({
-  isPlaying,
-  setIsPlaying,
-  setCurrentTimeMs,
-  setTotalDurationMs
-})));
+export const useAudioPlayerStore = () =>
+  usePlayerStore(
+    useShallow(({ isPlaying, setIsPlaying, setCurrentTimeMs, setTotalDurationMs }) => ({
+      isPlaying,
+      setIsPlaying,
+      setCurrentTimeMs,
+      setTotalDurationMs,
+    }))
+  );
 
-export const useLanguageModalStore = () => usePlayerStore(useShallow(({
-  isModalVisible,
-  setModalVisible,
-  translationLang,
-  setTranslationLang,
-}) => ({
-  isModalVisible,
-  setModalVisible,
-  translationLang,
-  setTranslationLang,
-})));
+export const useLanguageModalStore = () =>
+  usePlayerStore(
+    useShallow(({ isModalVisible, setModalVisible, translationLang, setTranslationLang }) => ({
+      isModalVisible,
+      setModalVisible,
+      translationLang,
+      setTranslationLang,
+    }))
+  );
 
-export const useActiveIndexStore = () => usePlayerStore(useShallow(({
-  currentTimeMs,
-  setActiveIndex,
-}) => ({
-  currentTimeMs,
-  setActiveIndex,
-})));
+export const useActiveIndexStore = () =>
+  usePlayerStore(
+    useShallow(({ currentTimeMs, setActiveIndex }) => ({
+      currentTimeMs,
+      setActiveIndex,
+    }))
+  );
 
-export const useLineProgressStore = () => usePlayerStore(useShallow(({
-  currentTimeMs,
-  activeIndex,
-  isPlaying,
-}) => ({
-  currentTimeMs,
-  activeIndex,
-  isPlaying,
-})));
+export const useLineProgressStore = () =>
+  usePlayerStore(
+    useShallow(({ currentTimeMs, activeIndex, isPlaying }) => ({
+      currentTimeMs,
+      activeIndex,
+      isPlaying,
+    }))
+  );
 
-export const usePlayerControlsStore = () => usePlayerStore(useShallow(({
-  isPlaying,
-  currentTimeMs,
-  translationLang,
-  totalDurationMs,
-  setModalVisible,
-}) => ({
-  isPlaying,
-  currentTimeMs,
-  translationLang,
-  totalDurationMs,
-  setModalVisible,
-})));
+export const usePlayerControlsStore = () =>
+  usePlayerStore(
+    useShallow(({ isPlaying, currentTimeMs, translationLang, totalDurationMs, setModalVisible }) => ({
+      isPlaying,
+      currentTimeMs,
+      translationLang,
+      totalDurationMs,
+      setModalVisible,
+    }))
+  );

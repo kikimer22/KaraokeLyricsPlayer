@@ -1,8 +1,9 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useEffect } from 'react';
 import { FlatList, Platform, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSharedValue } from 'react-native-reanimated';
 
 import { SONG_DATA } from '@/lib/data';
 import LyricLine from '@/lib/components/LyricLine';
@@ -13,10 +14,10 @@ import LanguageModal from '@/lib/components/LanguageModal';
 
 import { ITEM_HEIGHT } from '@/lib/constants';
 import type { LrcLine } from '@/lib/types';
+import { createLineWordsLookup, getWordsForLine, hasValidRichSync } from '@/lib/utils';
 
 import { useAudioPlayer } from '@/lib/hooks/useAudioPlayer';
 import { useActiveIndex } from '@/lib/hooks/useActiveIndex';
-import { useLineProgress } from '@/lib/hooks/useLineProgress';
 import { useAutoScroll } from '@/lib/hooks/useAutoScroll';
 import { useAppStore } from '@/lib/store/store';
 
@@ -25,15 +26,40 @@ export default function App() {
     translationLang,
     isUserScrolling,
     activeIndex,
+    currentTimeMs,
     setIsUserScrolling,
   } = useAppStore();
+
   const { play, toggle, seekTo } = useAudioPlayer({ data: SONG_DATA });
+
   useActiveIndex({ lyrics: SONG_DATA.lrc });
+
   const flatListRef = useAutoScroll({
     activeIndex,
     enabled: !isUserScrolling,
   });
-  const lineProgress = useLineProgress({ data: SONG_DATA });
+
+  // Create shared value for current time (for animations)
+  const currentTimeMsShared = useSharedValue(0);
+
+  // Update shared value when currentTimeMs changes (outside render)
+  useEffect(() => {
+    currentTimeMsShared.value = currentTimeMs;
+  }, [currentTimeMs, currentTimeMsShared]);
+
+  // Create line-to-words mapping for richSync
+  const lineWordsMap = useMemo(
+    () => hasValidRichSync(SONG_DATA) ? createLineWordsLookup(SONG_DATA) : new Map(),
+    []
+  );
+
+  const handleWordPress = useCallback(
+    (timeMs: number) => {
+      seekTo(timeMs);
+      play();
+    },
+    [seekTo, play]
+  );
 
   const handleLinePress = useCallback(
     (line: LrcLine) => {
@@ -52,23 +78,33 @@ export default function App() {
   }, [setIsUserScrolling]);
 
   const renderItem = useCallback(
-    ({ item, index }: { item: LrcLine; index: number }) => (
-      <LyricLine
-        item={item}
-        translationLang={translationLang}
-        index={index}
-        activeIndex={activeIndex}
-        progress={lineProgress}
-        onPress={() => handleLinePress(item)}
-      />
-    ),
-    [translationLang, activeIndex, lineProgress, handleLinePress]
+    ({ item, index }: { item: LrcLine; index: number }) => {
+      const lineWords = getWordsForLine(lineWordsMap, item._id.$oid);
+
+      return (
+        <LyricLine
+          item={item}
+          translationLang={translationLang}
+          index={index}
+          activeIndex={activeIndex}
+          currentTimeMs={currentTimeMsShared}
+          lineWords={lineWords}
+          onWordPress={handleWordPress}
+          onLinePress={() => handleLinePress(item)}
+        />
+      );
+    },
+    [
+      translationLang,
+      activeIndex,
+      currentTimeMsShared,
+      lineWordsMap,
+      handleWordPress,
+      handleLinePress,
+    ]
   );
 
-  const keyExtractor = useCallback(
-    (item: LrcLine) => item._id.$oid,
-    []
-  );
+  const keyExtractor = useCallback((item: LrcLine) => item._id.$oid, []);
 
   const getItemLayout = useCallback(
     (_: any, index: number) => ({
@@ -134,17 +170,15 @@ export default function App() {
             description={SONG_DATA.artist.name}
           />
 
-          {Platform.OS === 'web' ?
-            <View style={styles.lyricsContainer}>{renderLyricsList()}</View> : (
+          {Platform.OS === 'web' ? (
+            <View style={styles.lyricsContainer}>{renderLyricsList()}</View>
+          ) : (
             <MaskedView style={styles.lyricsContainer} maskElement={gradientMask}>
               {renderLyricsList()}
             </MaskedView>
           )}
 
-          <PlayerControls
-            onPlayPause={toggle}
-            onSeek={seekTo}
-          />
+          <PlayerControls onPlayPause={toggle} onSeek={seekTo} />
 
           <LanguageModal
             actualLanguage={SONG_DATA.musixmatch.lyrics.lyrics_language}

@@ -1,3 +1,5 @@
+import type { LrcLine, SongData, WordEntry } from '@/lib/types';
+
 export const getOpacity = (distance: number) => {
   if (distance === 0) return 1;
   if (distance === 1 || distance === -1) return 0.7;
@@ -37,3 +39,63 @@ export const findCurrentIndex = (lrc: { milliseconds: number }[], currentTimeMs:
 
   return result;
 };
+
+export const mapWordsToLines = (
+  lrcLines: readonly LrcLine[],
+  richSyncWords: readonly WordEntry[]
+): Map<string, WordEntry[]> => {
+  const lineWordsMap = new Map<string, WordEntry[]>();
+
+  if (!richSyncWords || richSyncWords.length === 0) {
+    return lineWordsMap;
+  }
+
+  for (const line of lrcLines) {
+    const lineId = line._id.$oid;
+    const lineStart = line.milliseconds;
+    const lineEnd = lineStart + line.duration;
+
+    // Find words that belong to this line
+    const wordsInLine = richSyncWords.filter(
+      (word) => word.start >= lineStart && word.start < lineEnd
+    );
+
+    if (wordsInLine.length > 0) {
+      lineWordsMap.set(lineId, wordsInLine);
+    }
+  }
+
+  return lineWordsMap;
+};
+
+/**
+ * Creates a mapping of line words for efficient lookups
+ */
+export const createLineWordsLookup = (
+  songData: SongData
+): Map<string, WordEntry[]> => {
+  const richSyncWords = songData.richSync?.words ?? [];
+  return mapWordsToLines(songData.lrc, richSyncWords);
+};
+
+/**
+ * Validates if richSync data is available and usable
+ */
+export const hasValidRichSync = (songData: SongData): boolean => {
+  return Boolean(
+    songData.richSync?.words &&
+    songData.richSync.words.length > 0 &&
+    songData.richSync.status !== 'error'
+  );
+};
+
+/**
+ * Gets words for a specific line ID
+ */
+export const getWordsForLine = (
+  lineWordsMap: Map<string, WordEntry[]>,
+  lineId: string
+): readonly WordEntry[] => {
+  return lineWordsMap.get(lineId) ?? [];
+};
+
