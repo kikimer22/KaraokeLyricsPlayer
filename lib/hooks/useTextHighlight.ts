@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useRef } from 'react';
 import { I18nManager, type NativeSyntheticEvent, type TextLayoutEventData } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import type { WordEntry } from '@/lib/types';
@@ -32,11 +32,16 @@ export const useTextHighlight = ({
 
   const resolvedDirection = writingDirection ?? (I18nManager.isRTL ? 'rtl' : 'ltr');
   const isRTL = resolvedDirection === 'rtl';
+
   const displayText = useMemo(() => text.trim(), [text]);
   const wordMappings = useMemo(() => mapWordsToChars(displayText, words), [displayText, words]);
 
+  const layoutRef = useRef<readonly LineLayout[] | null>(null);
+
   const handleLayout = useCallback((e: NativeSyntheticEvent<TextLayoutEventData>) => {
-    setLines(parseTextLayoutLines(e.nativeEvent.lines));
+    const parsed = parseTextLayoutLines(e.nativeEvent.lines);
+    layoutRef.current = parsed;
+    setLines(parsed);
     setReady(true);
   }, []);
 
@@ -44,13 +49,13 @@ export const useTextHighlight = ({
     (x: number, y: number) => {
       const fallbackStart = words[0]?.start ?? 0;
 
-      if (!ready || !lines.length || !wordMappings.length) {
+      if (!layoutRef.current || !layoutRef.current.length || !wordMappings.length) {
         currentTimeMs.value = fallbackStart;
         onWordPress(fallbackStart);
         return;
       }
 
-      const line = getLineAtPosition(y, lines);
+      const line = getLineAtPosition(y, layoutRef.current);
       if (!line) {
         currentTimeMs.value = fallbackStart;
         onWordPress(fallbackStart);
@@ -58,13 +63,13 @@ export const useTextHighlight = ({
       }
 
       const charPos = estimateCharPosition(x, line, isRTL);
-      const targetWord = findClosestWordInLine(charPos, line, wordMappings);
-      const targetTime = targetWord.word.start;
+      const targetWord = findClosestWordInLine(charPos, line, wordMappings.filter(m => m.startChar < line.endChar && m.endChar > line.startChar));
+      const targetTime = targetWord?.word?.start ?? fallbackStart;
 
       currentTimeMs.value = targetTime;
       onWordPress(targetTime);
     },
-    [ready, lines, wordMappings, words, isRTL, currentTimeMs, onWordPress]
+    [currentTimeMs, onWordPress, isRTL, wordMappings, words]
   );
 
   return {

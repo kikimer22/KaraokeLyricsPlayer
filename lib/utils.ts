@@ -30,6 +30,21 @@ export const findCurrentIndex = (lrc: readonly { milliseconds: number }[], timeM
   return -1;
 };
 
+export const findWordIndexByTime = (words: readonly { start: number; end: number }[], timeMs: number): number => {
+  let low = 0;
+  let high = words.length - 1;
+  let result = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    const w = words[mid];
+    if (timeMs >= w.start && timeMs < w.end) return mid;
+    if (timeMs < w.start) high = mid - 1; else low = mid + 1;
+  }
+
+  return result;
+};
+
 export const mapWordsToLines = (
   lines: readonly LrcLine[],
   words: readonly WordEntry[]

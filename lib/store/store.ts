@@ -8,6 +8,7 @@ interface PlayerState {
   currentTimeMs: number;
   activeIndex: number;
   totalDurationMs: number;
+  currentWordIndex: number;
 
   // UI state
   translationLang: Languages | null;
@@ -19,6 +20,7 @@ interface PlayerState {
   setCurrentTimeMs: (time: number) => void;
   setActiveIndex: (index: number) => void;
   setTotalDurationMs: (time: number) => void;
+  setCurrentWordIndex: (index: number) => void;
   setTranslationLang: (lang: Languages | null) => void;
   setModalVisible: (visible: boolean) => void;
   setIsUserScrolling: (scrolling: boolean) => void;
@@ -29,6 +31,7 @@ const usePlayerStore = create<PlayerState>((set) => ({
   currentTimeMs: 0,
   activeIndex: -1,
   totalDurationMs: 0,
+  currentWordIndex: -1,
   translationLang: null,
   isModalVisible: false,
   isUserScrolling: false,
@@ -37,6 +40,7 @@ const usePlayerStore = create<PlayerState>((set) => ({
   setCurrentTimeMs: (time) => set({ currentTimeMs: time }),
   setActiveIndex: (index) => set({ activeIndex: index }),
   setTotalDurationMs: (time) => set({ totalDurationMs: time }),
+  setCurrentWordIndex: (index) => set({ currentWordIndex: index }),
   setTranslationLang: (lang) => set({ translationLang: lang }),
   setModalVisible: (visible) => set({ isModalVisible: visible }),
   setIsUserScrolling: (scrolling) => set({ isUserScrolling: scrolling }),
@@ -54,11 +58,12 @@ export const useAppStore = () =>
 
 export const useAudioPlayerStore = () =>
   usePlayerStore(
-    useShallow(({ isPlaying, setIsPlaying, setCurrentTimeMs, setTotalDurationMs }) => ({
+    useShallow(({ isPlaying, setIsPlaying, setCurrentTimeMs, setTotalDurationMs, setCurrentWordIndex }) => ({
       isPlaying,
       setIsPlaying,
       setCurrentTimeMs,
       setTotalDurationMs,
+      setCurrentWordIndex,
     }))
   );
 

@@ -21,10 +21,10 @@ export interface WordMapping {
   readonly text: string;
 }
 
-const APOSTROPHE_REGEX = /[\u2018\u2019']/g;
-const LEADING_PUNCT_REGEX = /^[^\w']+/;
-const TRAILING_PUNCT_REGEX = /[^\w']+$/;
-const WORD_CHAR_REGEX = /[\w']/;
+const APOSTROPHE_REGEX = /[\u2018\u2019\u0027]/g;
+const LEADING_PUNCT_REGEX = /^[^\w\u0027]+/;
+const TRAILING_PUNCT_REGEX = /[^\w\u0027]+$/;
+const WORD_CHAR_REGEX = /[\w\u0027]/;
 
 const normalize = (str: string): string => str.toLowerCase().replace(APOSTROPHE_REGEX, "'");
 

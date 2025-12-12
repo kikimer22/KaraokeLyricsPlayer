@@ -97,7 +97,16 @@ const areEqual = (prev: LyricLineProps, next: LyricLineProps) =>
   prev.isActive === next.isActive &&
   prev.translationLang === next.translationLang &&
   prev.item._id.$oid === next.item._id.$oid &&
-  prev.lineWords === next.lineWords;
+  (
+    prev.lineWords === next.lineWords ||
+    (prev.lineWords.length === next.lineWords.length &&
+      (prev.lineWords.length === 0 ||
+        (
+          prev.lineWords[0]?.start === next.lineWords[0]?.start &&
+          prev.lineWords[prev.lineWords.length - 1]?.end === next.lineWords[next.lineWords.length - 1]?.end
+        )
+    ))
+  );
 
 export default memo(LyricLine, areEqual);
 

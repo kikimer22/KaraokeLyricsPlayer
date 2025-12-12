@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { FlatList, Platform, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import MaskedView from '@react-native-masked-view/masked-view';
@@ -54,7 +54,9 @@ export default function App() {
     seekTo(timeMs);
   }, [seekTo, currentTimeMsShared]);
 
-  const linePressHandlers = useRef<Map<string, () => void>>(new Map());
+  const scrollResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const linePressHandlers = useRef(new Map<string, () => void>());
 
   const getLinePressHandler = useCallback((line: LrcLine) => {
     const id = line._id.$oid;
@@ -70,8 +72,27 @@ export default function App() {
 
   const handleScrollBeginDrag = useCallback(() => setIsUserScrolling(true), [setIsUserScrolling]);
   const handleMomentumScrollEnd = useCallback(() => {
-    setTimeout(() => setIsUserScrolling(false), SCROLL_RESET_DELAY);
+    if (scrollResetTimeoutRef.current) {
+      clearTimeout(scrollResetTimeoutRef.current);
+      scrollResetTimeoutRef.current = null;
+    }
+
+    scrollResetTimeoutRef.current = setTimeout(() => {
+      setIsUserScrolling(false);
+      scrollResetTimeoutRef.current = null;
+    }, SCROLL_RESET_DELAY);
   }, [setIsUserScrolling]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollResetTimeoutRef.current) {
+        clearTimeout(scrollResetTimeoutRef.current);
+        scrollResetTimeoutRef.current = null;
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      linePressHandlers.current?.clear();
+    };
+  }, []);
 
   const renderItem = useCallback(({ item, index }: { item: LrcLine; index: number }) => (
     <LyricLine
@@ -97,11 +118,11 @@ export default function App() {
     snapToInterval: ITEM_HEIGHT,
     snapToAlignment: 'center' as const,
     showsVerticalScrollIndicator: false,
-    windowSize: 7,
-    initialNumToRender: 5,
-    maxToRenderPerBatch: 3,
-    updateCellsBatchingPeriod: 50,
-    removeClippedSubviews: Platform.OS === 'android',
+    windowSize: 5,
+    initialNumToRender: 3,
+    maxToRenderPerBatch: 2,
+    updateCellsBatchingPeriod: 80,
+    removeClippedSubviews: true,
     onScrollBeginDrag: handleScrollBeginDrag,
     onMomentumScrollEnd: handleMomentumScrollEnd,
   };
